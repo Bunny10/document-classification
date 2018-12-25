@@ -90,6 +90,9 @@ curl --header "Content-Type: application/json" \
 - *setup.py*: custom package setup
 
 
-
-
+### TODO
+- experiment id validation
+- Dockerfile
+- Swagger API documentation
+- serving with Onnx and Caffe2
 
