@@ -9,10 +9,6 @@ python setup.py develop
 python document_classification/application.py
 ```
 
-### Set up with Dockerfile
-```
-```
-
 ### API endpoints
 - Health check `GET /api`
 ```bash
@@ -64,7 +60,6 @@ curl --header "Content-Type: application/json" \
      --request GET \
      http://localhost:5000/classes/latest
 ```
-
 
 ### Content
 - **datasets**: directory to hold datasets
