@@ -1,5 +1,7 @@
 # Document Classification
 
+Document classification using PyTorch. This repository was made using the [productionML cookiecutter](https://github.com/practicalAI/productionML) template.
+
 ### Set up with virtualenv
 ```
 virtualenv -p python3.6 venv
