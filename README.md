@@ -25,7 +25,7 @@ curl --header "Content-Type: application/json" \
 ```bash
 curl --header "Content-Type: application/json" \
      --request POST \
-     --data '{"config_filepath": "/Users/goku/Documents/productionML/document_classification/configs/train.json"}' \
+     --data '{"config_filepath": "/Users/goku/Documents/document_classification/configs/train.json"}' \
      http://localhost:5000/train
 ```
 
@@ -33,7 +33,7 @@ curl --header "Content-Type: application/json" \
 ```bash
 curl --header "Content-Type: application/json" \
      --request POST \
-     --data '{"config_filepath": "/Users/goku/Documents/productionML/document_classification/configs/infer.json"}' \
+     --data '{"config_filepath": "/Users/goku/Documents/document_classification/configs/infer.json"}' \
      http://localhost:5000/infer
 ```
 
@@ -65,38 +65,36 @@ curl --header "Content-Type: application/json" \
      http://localhost:5000/classes/latest
 ```
 
+
 ### Content
-- **📁 datasets**:
-- **📁 document_classification**:
-    - **📁 api**:
-        - *📄 api.py*:
-        - *📄 utils.py*:
-    - **📁 config**:
-        - *📄 train.json*:
-        - *📄 infer.json*:
-    - **📁 experiments**:
-    - **📁 logs**:
-        - *📄 flask.log*:
-        - *📄 ml.log*:
-    - **📁 ml**:
-        - *📄 dataset.py*:
-        - *📄 inference.py*:
-        - *📄 load.py*:
-        - *📄 model.py*:
-        - *📄 preprocess.py*:
-        - *📄 split.py*:
-        - *📄 training.py*:
-        - *📄 utils.py*:
-        - *📄 vectorizer.py*:
-        - *📄 vocabulary.py*:
-    - *📄 application.py*:
-    - *📄 config.py*:
-    - *📄 utils.py*:
-- *📄 .gitignore*:
-- *📄 Dockerfile*:
-- *📄 LICENSE*:
-- *📄 requirements.txt*:
-- *📄 setup.py*:
+- **datasets**: directory to hold datasets
+- **configs**: configuration files
+    - *train.json*: training configurations
+    - *infer.json*: inference configurations
+- **document_classification**:
+    - *application.py*: application script
+    - *config.py*: application configuration
+    - *utils.py*: application utilities
+    - **api**: holds all API scripts
+        - *api.py*: API call definitions
+        - *utils.py*: utility functions
+    - **ml**:
+        - *dataset.py*: dataset/dataloader
+        - *inference.py*: inference operations
+        - *load.py*: load the data
+        - *model.py*: model architecture
+        - *preprocess.py*: preprocess the data
+        - *split.py*: split the data
+        - *training.py*: train the model
+        - *utils.py*: utility functions
+        - *vectorizer.py*: vectorize the processed data
+        - *vocabulary.py*: vocabulary to vectorize data
+- *.gitignore*: gitignore file
+- *LICENSE*: license of choice (default is MIT)
+- *requirements.txt*: python package requirements
+- *setup.py*: custom package setup
+
+
 
 
 
