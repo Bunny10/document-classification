@@ -7,8 +7,16 @@ Document classification using PyTorch. This repository was made using the [produ
 virtualenv -p python3.6 venv
 source venv/bin/activate
 pip install -r requirements.txt
+pip install torch==1.0.0
 python setup.py develop
 python document_classification/application.py
+```
+
+### Set up with docker
+```bash
+docker build -t document_classification:cpu -f Dockerfile.cpu .
+docker run -d -p 5000:5000 --name document_classification document_classification:cpu
+docker exec -it document_classification /bin/bash
 ```
 
 ### API endpoints
