@@ -120,9 +120,11 @@ EXPOSE 8888 6006 5000
 # 📖 Document classification
 # ------------------------------------------------------------------------------
 #
-COPY . /Users/goku/Documents/document_classification/
-WORKDIR /Users/goku/Documents/document_classification/
+ARG DIR
+COPY . $DIR/
+WORKDIR $DIR/
 RUN pip install -r requirements.txt && \
     python setup.py develop
-CMD ["python", "/Users/goku/Documents/document_classification/document_classification/application.py"]
+ENV DIR ${DIR}
+CMD python ${DIR}/document_classification/application.py
 
