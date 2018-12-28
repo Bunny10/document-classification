@@ -14,7 +14,7 @@ python document_classification/application.py
 
 ### Set up with docker
 ```bash
-docker build -t document_classification:cpu -f Dockerfile.cpu .
+docker build -t document_classification:cpu --build-arg DIR="/Users/goku/Documents/document_classification" -f Dockerfile.cpu .
 docker run -d -p 5000:5000 --name document_classification document_classification:cpu
 docker exec -it document_classification /bin/bash
 ```
