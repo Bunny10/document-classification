@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 class Inference(object):
-    def __init__(self, model, vectorizer, device):
+    def __init__(self, model, vectorizer, device="cpu"):
         self.model = model.to(device)
         self.vectorizer = vectorizer
         self.device = device
