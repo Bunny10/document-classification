@@ -142,10 +142,11 @@ def inference_operations(experiment_id, X):
     model = model.to("cpu")
 
     # Initialize inference
-    inference = Inference(model=model, vectorizer=vectorizer, device="cpu")
+    inference = Inference(model=model, vectorizer=vectorizer)
 
     # Infer
     infer_df = pd.DataFrame([X], columns=['X'])
+    infer_df.surname = infer_df.surname.apply(preprocess_text)
     infer_dataset = InferenceDataset(df=infer_df, vectorizer=vectorizer)
     results = inference.predict(dataset=infer_dataset)
 
