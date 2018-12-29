@@ -1,6 +1,7 @@
 import os
 import json
 import numpy as np
+import pandas as pd
 import random
 import time
 from threading import Thread
@@ -12,7 +13,7 @@ from document_classification.ml.load import load_data
 from document_classification.ml.split import split_data
 from document_classification.ml.preprocess import preprocess_text, preprocess_data
 from document_classification.ml.vectorizer import Vectorizer
-from document_classification.ml.dataset import Dataset, sample
+from document_classification.ml.dataset import Dataset, InferenceDataset, sample
 from document_classification.ml.model import initialize_model
 from document_classification.ml.training import Trainer
 from document_classification.ml.inference import Inference
@@ -140,15 +141,13 @@ def inference_operations(experiment_id, X):
     model.load_state_dict(torch.load(config["model_file"]))
     model = model.to("cpu")
 
-    # Inference
-    inference = Inference(model=model, vectorizer=vectorizer)
-    top_k = inference.predict_top_k(preprocess_text(X), k=len(vectorizer.y_vocab))
-    results = []
-    for result in top_k:
-        results.append({
-            "category": result['y'],
-            "probability": np.float64(result['probability']),
-            })
+    # Initialize inference
+    inference = Inference(model=model, vectorizer=vectorizer, device="cpu")
+
+    # Infer
+    infer_df = pd.DataFrame([X], columns=['X'])
+    infer_dataset = InferenceDataset(infer_df, vectorizer)
+    results = inference.predict(dataset=infer_dataset)
 
     return results
 

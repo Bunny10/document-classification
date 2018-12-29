@@ -1,47 +1,32 @@
 import os
+import numpy as np
 import torch
 
 class Inference(object):
-    def __init__(self, model, vectorizer):
-        self.model = model
+    def __init__(self, model, vectorizer, device):
+        self.model = model.to(device)
         self.vectorizer = vectorizer
+        self.device = device
 
-    def predict_y(self, X):
-        # Vectorize
-        vectorized_X = self.vectorizer.vectorize(X)
-        vectorized_X = torch.tensor(vectorized_X).unsqueeze(0)
-
-        # Forward pass
+    def predict(self, dataset):
+        # Batch generator
+        batch_generator = dataset.generate_batches(
+            batch_size=len(dataset), shuffle=False, device=self.device)
         self.model.eval()
-        y_pred = self.model(x_in=vectorized_X, apply_softmax=True)
 
-        # Top y
-        y_prob, indices = y_pred.max(dim=1)
-        index = indices.item()
+        # Predict
+        for batch_index, batch_dict in enumerate(batch_generator):
+            # compute the output
+            y_pred =  self.model(batch_dict['X'], apply_softmax=True)
 
-        # Predicted y
-        y = vectorizer.y_vocab.lookup_index(index)
-        probability = y_prob.item()
-        return {'y': y, 'probability': probability}
+            # Top k nationalities
+            y_prob, indices = torch.topk(y_pred, k=len(self.vectorizer.y_vocab))
+            probabilities = y_prob.detach().to('cpu').numpy()[0]
+            indices = indices.detach().to('cpu').numpy()[0]
 
-    def predict_top_k(self, X, k):
-        # Vectorize
-        vectorized_X = self.vectorizer.vectorize(X)
-        vectorized_X = torch.tensor(vectorized_X).unsqueeze(0)
-
-        # Forward pass
-        self.model.eval()
-        y_pred = self.model(x_in=vectorized_X, apply_softmax=True)
-
-        # Top k categories
-        y_prob, indices = torch.topk(y_pred, k=k)
-        probabilities = y_prob.detach().numpy()[0]
-        indices = indices.detach().numpy()[0]
-
-        # Results
-        results = []
-        for probability, index in zip(probabilities, indices):
-            y = self.vectorizer.y_vocab.lookup_index(index)
-            results.append({'y': y, 'probability': probability})
+            results = []
+            for probability, index in zip(probabilities, indices):
+                y = self.vectorizer.y_vocab.lookup_index(index)
+                results.append({'y': y, 'probability': np.float64(probability)})
 
         return results

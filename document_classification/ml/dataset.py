@@ -85,6 +85,35 @@ class Dataset(Dataset):
                 out_data_dict[name] = data_dict[name].to(device)
             yield out_data_dict
 
+class InferenceDataset(Dataset):
+    def __init__(self, df, vectorizer):
+        self.df = df
+        self.vectorizer = vectorizer
+        self.target_size = len(self.df)
+
+    def __str__(self):
+        return "<Dataset(size={1})>".format(self.target_size)
+
+    def __len__(self):
+        return self.target_size
+
+    def __getitem__(self, index):
+        row = self.df.iloc[index]
+        X = self.vectorizer.vectorize(row.X)
+        return {'X': X}
+
+    def get_num_batches(self, batch_size):
+        return len(self) // batch_size
+
+    def generate_batches(self, batch_size, shuffle=True, drop_last=False, device="cpu"):
+        dataloader = DataLoader(dataset=self, batch_size=batch_size,
+                                shuffle=shuffle, drop_last=drop_last)
+        for data_dict in dataloader:
+            out_data_dict = {}
+            for name, tensor in data_dict.items():
+                out_data_dict[name] = data_dict[name].to(device)
+            yield out_data_dict
+
 def sample(dataset):
     """Some sanity checks on the dataset.
     """
