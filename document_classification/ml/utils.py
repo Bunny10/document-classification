@@ -146,7 +146,7 @@ def inference_operations(experiment_id, X):
 
     # Infer
     infer_df = pd.DataFrame([X], columns=['X'])
-    infer_dataset = InferenceDataset(infer_df, vectorizer)
+    infer_dataset = InferenceDataset(df=infer_df, vectorizer=vectorizer)
     results = inference.predict(dataset=infer_dataset)
 
     return results
