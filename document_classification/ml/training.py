@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from document_classification.config import BASE_DIR, ml_logger
-from document_classification.ml.utils import set_seeds, generate_unique_id
+from document_classification.ml.utils import set_seeds, generate_unique_id, collate_fn
 from document_classification.ml.load import load_data
 from document_classification.ml.split import split_data
 from document_classification.ml.preprocess import preprocess_data
@@ -90,37 +90,6 @@ class Trainer(object):
         n_correct = torch.eq(y_pred_indices, y_target).sum().item()
         return n_correct / len(y_pred_indices) * 100
 
-    def pad_seq(self, seq, length):
-        vector = np.zeros(length, dtype=np.int64)
-        vector[:len(seq)] = seq
-        vector[len(seq):] = self.dataset.vectorizer.X_vocab.mask_index
-        return vector
-
-    def collate_fn(self, batch):
-
-        # Make a deep copy
-        batch_copy = copy.deepcopy(batch)
-        processed_batch = {"X": [], "y": []}
-
-        # Get max sequence length
-        max_seq_len = max([len(sample["X"]) for sample in batch_copy])
-
-        # Pad
-        for i, sample in enumerate(batch_copy):
-            seq = sample["X"]
-            y = sample["y"]
-            padded_seq = self.pad_seq(seq, max_seq_len)
-            processed_batch["X"].append(padded_seq)
-            processed_batch["y"].append(y)
-
-        # Convert to appropriate tensor types
-        processed_batch["X"] = torch.LongTensor(
-            processed_batch["X"])
-        processed_batch["y"] = torch.LongTensor(
-            processed_batch["y"])
-
-        return processed_batch
-
     def run_train_loop(self):
 
         ml_logger.info("\n==> 🏋 Training:")
@@ -133,7 +102,7 @@ class Trainer(object):
             # setup: batch generator, set loss and acc to 0, set train mode on
             self.dataset.set_split('train')
             batch_generator = self.dataset.generate_batches(
-                batch_size=self.batch_size, collate_fn=self.collate_fn,
+                batch_size=self.batch_size, collate_fn=collate_fn,
                 shuffle=self.shuffle, device=self.device)
             running_loss = 0.0
             running_acc = 0.0
@@ -172,7 +141,7 @@ class Trainer(object):
             # setup: batch generator, set loss and acc to 0; set eval mode on
             self.dataset.set_split('val')
             batch_generator = self.dataset.generate_batches(
-                batch_size=self.batch_size, collate_fn=self.collate_fn,
+                batch_size=self.batch_size, collate_fn=collate_fn,
                 shuffle=self.shuffle, device=self.device)
             running_loss = 0.
             running_acc = 0.
@@ -203,7 +172,7 @@ class Trainer(object):
     def run_test_loop(self):
         self.dataset.set_split('test')
         batch_generator = self.dataset.generate_batches(
-            batch_size=self.batch_size, collate_fn=self.collate_fn,
+            batch_size=self.batch_size, collate_fn=collate_fn,
             shuffle=self.shuffle, device=self.device)
         running_loss = 0.0
         running_acc = 0.0

@@ -105,9 +105,11 @@ class InferenceDataset(Dataset):
     def get_num_batches(self, batch_size):
         return len(self) // batch_size
 
-    def generate_batches(self, batch_size, shuffle=True, drop_last=False, device="cpu"):
+    def generate_batches(self, batch_size, collate_fn, shuffle=True,
+                         drop_last=False, device="cpu"):
         dataloader = DataLoader(dataset=self, batch_size=batch_size,
-                                shuffle=shuffle, drop_last=drop_last)
+                                collate_fn=collate_fn, shuffle=shuffle,
+                                drop_last=drop_last)
         for data_dict in dataloader:
             out_data_dict = {}
             for name, tensor in data_dict.items():

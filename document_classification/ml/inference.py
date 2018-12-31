@@ -3,6 +3,7 @@ import json
 import numpy as np
 import pandas as pd
 import torch
+from torch.utils.data.dataloader import default_collate
 
 from document_classification.config import BASE_DIR
 from document_classification.ml.preprocess import preprocess_data
@@ -19,7 +20,8 @@ class Inference(object):
     def predict(self, dataset):
         # Batch generator
         batch_generator = dataset.generate_batches(
-            batch_size=len(dataset), shuffle=False, device=self.device)
+            batch_size=len(dataset), collate_fn=default_collate,
+            shuffle=False, device=self.device)
         self.model.eval()
 
         # Predict
