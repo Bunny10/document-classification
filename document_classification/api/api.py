@@ -31,7 +31,7 @@ def _train():
     if request.method == "POST":
 
         # Get config filepath
-        config_filepath = request.json["config_filepath"]
+        config_filepath = request.headers.get("config_filepath")
 
         # Training
         config = train(config_filepath=config_filepath)
@@ -53,8 +53,8 @@ def _infer():
     if request.method == "POST":
 
         # Get config filepath
-        experiment_id = request.json["experiment_id"]
-        X = request.json["X"]
+        experiment_id = request.headers.get("experiment_id")
+        X = request.headers.get("X")
 
         # Inference
         results = infer(experiment_id=experiment_id, X=X)
