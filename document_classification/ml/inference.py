@@ -3,9 +3,9 @@ import json
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data.dataloader import default_collate
 
 from document_classification.config import BASE_DIR
+from document_classification.ml.utils import collate_fn
 from document_classification.ml.preprocess import preprocess_data
 from document_classification.ml.vectorizer import Vectorizer
 from document_classification.ml.dataset import InferenceDataset, sample
@@ -20,7 +20,7 @@ class Inference(object):
     def predict(self, dataset):
         # Batch generator
         batch_generator = dataset.generate_batches(
-            batch_size=len(dataset), collate_fn=default_collate,
+            batch_size=len(dataset), collate_fn=collate_fn,
             shuffle=False, device=self.device)
         self.model.eval()
 
@@ -67,7 +67,8 @@ def inference_operations(experiment_id, X):
     inference = Inference(model=model, vectorizer=vectorizer)
 
     # Create inference dataset
-    infer_df = pd.DataFrame([X], columns=['X'])
+    y = list(vectorizer.y_vocab.token_to_idx.keys())[0] # random filler y
+    infer_df = pd.DataFrame([[X, y]], columns=['X', 'y'])
     infer_df = preprocess_data(df=infer_df)
     infer_dataset = InferenceDataset(df=infer_df, vectorizer=vectorizer)
 
