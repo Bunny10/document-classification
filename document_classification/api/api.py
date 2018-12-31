@@ -53,10 +53,11 @@ def _infer():
     if request.method == "POST":
 
         # Get config filepath
-        config_filepath = request.json["config_filepath"]
+        experiment_id = request.json["experiment_id"]
+        X = request.json["X"]
 
         # Inference
-        results = infer(config_filepath=config_filepath)
+        results = infer(experiment_id=experiment_id, X=X)
         resp = {"results": results}
         status = 200
         return make_response(jsonify(resp), status)

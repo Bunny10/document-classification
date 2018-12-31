@@ -4,7 +4,7 @@ import shutil
 from threading import Thread
 
 from document_classification.config import BASE_DIR
-from document_classification.ml.utils import load_config
+from document_classification.utils import load_config
 from document_classification.ml.training import training_setup, training_operations
 from document_classification.ml.inference import inference_operations
 from document_classification.ml.dataset import Dataset
@@ -24,16 +24,9 @@ def train(config_filepath):
     return config
 
 
-def infer(config_filepath):
+def infer(experiment_id, X):
     """Predict using a model.
     """
-    # Load config
-    config = load_config(config_filepath=config_filepath)
-
-    # Get config filepath
-    experiment_id = config["experiment_id"]
-    X = config["X"]
-
     # Latest experiment_id
     if experiment_id == "latest":
         experiment_id = get_experiment_ids()[-1]
