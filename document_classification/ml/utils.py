@@ -9,14 +9,6 @@ from threading import Thread
 import torch
 import uuid
 
-def load_config(config_filepath):
-    """Load the yaml config.
-    """
-    with open(config_filepath, 'r') as fp:
-        config = json.load(fp)
-    return config
-
-
 def set_seeds(seed, cuda):
     """ Set Numpy and PyTorch seeds.
     """
