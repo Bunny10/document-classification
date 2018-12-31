@@ -100,7 +100,9 @@ class InferenceDataset(Dataset):
     def __getitem__(self, index):
         row = self.df.iloc[index]
         X = self.vectorizer.vectorize(row.X)
-        return {'X': X}
+        y = self.vectorizer.y_vocab.lookup_token(
+            row.y)
+        return {'X': X, 'y': y}
 
     def get_num_batches(self, batch_size):
         return len(self) // batch_size
