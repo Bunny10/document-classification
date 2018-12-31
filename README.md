@@ -30,17 +30,17 @@ curl --header "Content-Type: application/json" \
 - Training `POST /train`
 ```bash
 curl --header "Content-Type: application/json" \
+     --header "config_filepath: /Users/goku/Documents/document_classification/configs/train.json" \
      --request POST \
-     --data '{"config_filepath": "/Users/goku/Documents/document_classification/configs/train.json"}' \
      http://localhost:5000/train
 ```
 
 - Inference `POST /infer`
 ```bash
 curl --header "Content-Type: application/json" \
+     --header "experiment_id: latest" \
+     --header "X: Global warming is an increasing threat and scientists are working to find a solution." \
      --request POST \
-     --data '{"experiment_id": "latest",
-              "X": "Global warming is an increasing threat and scientists are working to find a solution."}' \
      http://localhost:5000/infer
 ```
 
@@ -103,6 +103,7 @@ curl --header "Content-Type: application/json" \
 
 ### TODO
 - experiment id validation
+- HTTPStatus code (ex. HTTPSStatus.BAD_REQUEST)
 - Dockerfile
 - Swagger API documentation
 - serving with Onnx and Caffe2
