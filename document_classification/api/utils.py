@@ -4,8 +4,9 @@ import shutil
 from threading import Thread
 
 from document_classification.config import BASE_DIR
-from document_classification.ml.utils import load_config, training_setup, \
-    training_operations, inference_operations
+from document_classification.ml.utils import load_config
+from document_classification.ml.training import training_setup, training_operations
+from document_classification.ml.inference import inference_operations
 from document_classification.ml.dataset import Dataset
 
 def train(config_filepath):
