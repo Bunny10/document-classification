@@ -8,11 +8,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from document_classification.config import ml_logger
+from document_classification.config import BASE_DIR, ml_logger
+from document_classification.ml.utils import set_seeds, generate_unique_id
+from document_classification.ml.load import load_data
+from document_classification.ml.split import split_data
+from document_classification.ml.preprocess import preprocess_data
 from document_classification.ml.vocabulary import Vocabulary, SequenceVocabulary
 from document_classification.ml.vectorizer import Vectorizer
-from document_classification.ml.dataset import Dataset
-from document_classification.ml.model import DocumentClassificationModel
+from document_classification.ml.dataset import Dataset, sample
+from document_classification.ml.model import DocumentClassificationModel, initialize_model
 
 class Trainer(object):
     def __init__(self, dataset, model, model_file, save_dir, device, shuffle,
@@ -265,4 +269,79 @@ class Trainer(object):
         ml_logger.info("==> ✅ Training complete!")
         with open(os.path.join(self.save_dir, "train_state.json"), "w") as fp:
             json.dump(self.train_state, fp)
+
+
+def training_setup(config):
+    """Set up training config.
+    """
+    # Set seeds
+    set_seeds(seed=config["seed"], cuda=config["cuda"])
+
+    # Generate experiment ID
+    config["experiment_id"] = generate_unique_id()
+
+    # Expand file paths
+    config["save_dir"] = os.path.join(
+        BASE_DIR, config["save_dir"], config["experiment_id"])
+    os.makedirs(config["save_dir"])
+    config["vectorizer_file"] = os.path.join(
+        config["save_dir"], config["vectorizer_file"])
+    config["model_file"] = os.path.join(
+        config["save_dir"], config["model_file"])
+
+    # Save config
+    config_fp = os.path.join(config["save_dir"], "config.json")
+    with open(config_fp, "w") as fp:
+        json.dump(config, fp)
+
+    # Check CUDA
+    if not torch.cuda.is_available():
+        config["device"] = False
+    config["device"] = torch.device("cuda" if config["cuda"] else "cpu")
+
+    return config
+
+
+def training_operations(config):
+    """ Operations for the training procedure.
+    """
+
+    # Load data
+    df = load_data(data_file=config["data_file"])
+
+    # Split data
+    split_df = split_data(
+        df=df, shuffle=config["shuffle"],
+        train_size=config["train_size"],
+        val_size=config["val_size"],
+        test_size=config["test_size"])
+
+    # Preprocessing
+    preprocessed_df = preprocess_data(split_df)
+
+    # Load dataset and vectorizer
+    dataset = Dataset.load_dataset_and_make_vectorizer(preprocessed_df)
+    dataset.save_vectorizer(config["vectorizer_file"])
+    vectorizer = dataset.vectorizer
+
+    # Sample checks
+    sample(dataset=dataset)
+
+    # Initializing model
+    model = initialize_model(config=config, vectorizer=vectorizer)
+
+    # Training
+    trainer = Trainer(
+        dataset=dataset, model=model, model_file=config["model_file"],
+        save_dir=config["save_dir"], device=config["device"],
+        shuffle=config["shuffle"], num_epochs=config["num_epochs"],
+        batch_size=config["batch_size"], learning_rate=config["learning_rate"],
+        early_stopping_criteria=config["early_stopping_criteria"])
+    trainer.run_train_loop()
+
+    # Testing
+    y_pred, y_test = trainer.run_test_loop()
+
+    # Save all results
+    trainer.save_train_state()
 
