@@ -61,7 +61,6 @@ def inference_operations(experiment_id, X):
 
     # Load model
     model.load_state_dict(torch.load(config["model_file"]))
-    model = model.to("cpu")
 
     # Initialize inference
     inference = Inference(model=model, vectorizer=vectorizer)
