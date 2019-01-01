@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from document_classification.config import BASE_DIR, ml_logger
-from document_classification.ml.utils import set_seeds, generate_unique_id, collate_fn
+from document_classification.ml.utils import set_seeds, create_dirs, generate_unique_id, check_cuda, collate_fn
 from document_classification.ml.load import load_data
 from document_classification.ml.split import split_data
 from document_classification.ml.preprocess import preprocess_data
@@ -18,13 +18,92 @@ from document_classification.ml.vectorizer import Vectorizer
 from document_classification.ml.dataset import Dataset, sample
 from document_classification.ml.model import DocumentClassificationModel, initialize_model
 
+def compute_accuracy(y_pred, y_target):
+    _, y_pred_indices = y_pred.max(dim=1)
+    n_correct = torch.eq(y_pred_indices, y_target).sum().item()
+    return n_correct / len(y_pred_indices) * 100
+
+
+def update_train_state(model, train_state):
+    """ Update train state during training.
+    """
+    # Verbose
+    print ("[EPOCH]: {0} | [LR]: {1} | [TRAIN LOSS]: {2:.2f} | [TRAIN ACC]: {3:.1f}% | [VAL LOSS]: {4:.2f} | [VAL ACC]: {5:.1f}%".format(
+      train_state['epoch_index'], train_state['learning_rate'],
+        train_state['train_loss'][-1], train_state['train_acc'][-1],
+        train_state['val_loss'][-1], train_state['val_acc'][-1]))
+
+    # Save one model at least
+    if train_state['epoch_index'] == 0:
+        torch.save(model.state_dict(), train_state['model_filename'])
+        train_state['stop_early'] = False
+
+    # Save model if performance improved
+    elif train_state['epoch_index'] >= 1:
+        loss_tm1, loss_t = train_state['val_loss'][-2:]
+
+        # If loss worsened
+        if loss_t >= train_state['early_stopping_best_val']:
+            # Update step
+            train_state['early_stopping_step'] += 1
+
+        # Loss decreased
+        else:
+            # Save the best model
+            if loss_t < train_state['early_stopping_best_val']:
+                torch.save(model.state_dict(), train_state['model_filename'])
+
+            # Reset early stopping step
+            train_state['early_stopping_step'] = 0
+
+        # Stop early ?
+        train_state['stop_early'] = train_state['early_stopping_step'] \
+          >= train_state['early_stopping_criteria']
+    return train_state
+
+
+def plot_performance(train_state, save_dir, show_plot=True):
+    """ Plot loss and accuracy.
+    """
+    # Figure size
+    plt.figure(figsize=(15,5))
+
+    # Plot Loss
+    plt.subplot(1, 2, 1)
+    plt.title("Loss")
+    plt.plot(train_state["train_loss"], label="train")
+    plt.plot(train_state["val_loss"], label="val")
+    plt.legend(loc='upper right')
+
+    # Plot Accuracy
+    plt.subplot(1, 2, 2)
+    plt.title("Accuracy")
+    plt.plot(train_state["train_acc"], label="train")
+    plt.plot(train_state["val_acc"], label="val")
+    plt.legend(loc='lower right')
+
+    # Save figure
+    plt.savefig(os.path.join(save_dir, "performance.png"))
+
+    # Show plots
+    if show_plot:
+        print ("==> 📈 Metric plots:")
+        plt.show()
+
+
+def save_train_state(train_state, save_dir):
+    train_state["done_training"] = True
+    with open(os.path.join(save_dir, "train_state.json"), "w") as fp:
+        json.dump(train_state, fp)
+    ml_logger.info("==> ✅ Training complete!")
+
+
 class Trainer(object):
-    def __init__(self, dataset, model, model_file, save_dir, device, shuffle,
+    def __init__(self, dataset, model, model_file, device, shuffle,
                num_epochs, batch_size, learning_rate, early_stopping_criteria):
         self.dataset = dataset
         self.class_weights = dataset.class_weights.to(device)
         self.model = model.to(device)
-        self.save_dir = save_dir
         self.device = device
         self.shuffle = shuffle
         self.num_epochs = num_epochs
@@ -48,47 +127,6 @@ class Trainer(object):
             'test_loss': -1,
             'test_acc': -1,
             'model_filename': model_file}
-
-    def update_train_state(self):
-
-        # Verbose
-        ml_logger.info("[EPOCH]: {0} | [LR]: {1} | [TRAIN LOSS]: {2:.2f} | [TRAIN ACC]: {3:.1f}% | [VAL LOSS]: {4:.2f} | [VAL ACC]: {5:.1f}%".format(
-          self.train_state['epoch_index']+1, self.train_state['learning_rate'],
-            self.train_state['train_loss'][-1], self.train_state['train_acc'][-1],
-            self.train_state['val_loss'][-1], self.train_state['val_acc'][-1]))
-
-        # Save one model at least
-        if self.train_state['epoch_index'] == 0:
-            torch.save(self.model.state_dict(), self.train_state['model_filename'])
-            self.train_state['stopped_early'] = False
-
-        # Save model if performance improved
-        elif self.train_state['epoch_index'] >= 1:
-            loss_tm1, loss_t = self.train_state['val_loss'][-2:]
-
-            # If loss worsened
-            if loss_t >= self.train_state['early_stopping_best_val']:
-                # Update step
-                self.train_state['early_stopping_step'] += 1
-
-            # Loss decreased
-            else:
-                # Save the best model
-                if loss_t < self.train_state['early_stopping_best_val']:
-                    torch.save(self.model.state_dict(), self.train_state['model_filename'])
-
-                # Reset early stopping step
-                self.train_state['early_stopping_step'] = 0
-
-            # Stop early ?
-            self.train_state['stopped_early'] = self.train_state['early_stopping_step'] \
-              >= self.train_state['early_stopping_criteria']
-        return self.train_state
-
-    def compute_accuracy(self, y_pred, y_target):
-        _, y_pred_indices = y_pred.max(dim=1)
-        n_correct = torch.eq(y_pred_indices, y_target).sum().item()
-        return n_correct / len(y_pred_indices) * 100
 
     def run_train_loop(self):
 
@@ -130,7 +168,7 @@ class Trainer(object):
                 self.optimizer.step()
                 # -----------------------------------------
                 # compute the accuracy
-                acc_t = self.compute_accuracy(y_pred, batch_dict['y'])
+                acc_t = compute_accuracy(y_pred, batch_dict['y'])
                 running_acc += (acc_t - running_acc) / (batch_index + 1)
 
             self.train_state['train_loss'].append(running_loss)
@@ -158,13 +196,14 @@ class Trainer(object):
                 running_loss += (loss_t - running_loss) / (batch_index + 1)
 
                 # compute the accuracy
-                acc_t = self.compute_accuracy(y_pred, batch_dict['y'])
+                acc_t = compute_accuracy(y_pred, batch_dict['y'])
                 running_acc += (acc_t - running_acc) / (batch_index + 1)
 
             self.train_state['val_loss'].append(running_loss)
             self.train_state['val_acc'].append(running_acc)
 
-            self.train_state = self.update_train_state()
+            self.train_state = update_train_state(model=self.model,
+                train_state=self.train_state)
             self.scheduler.step(self.train_state['val_loss'][-1])
             if self.train_state['stopped_early']:
                 break
@@ -178,8 +217,6 @@ class Trainer(object):
         running_acc = 0.0
         self.model.eval()
 
-        y_pred_list = []
-        y_test_list = []
         for batch_index, batch_dict in enumerate(batch_generator):
 
             # compute the output
@@ -191,12 +228,8 @@ class Trainer(object):
             running_loss += (loss_t - running_loss) / (batch_index + 1)
 
             # compute the accuracy
-            acc_t = self.compute_accuracy(y_pred, batch_dict['y'])
+            acc_t = compute_accuracy(y_pred, batch_dict['y'])
             running_acc += (acc_t - running_acc) / (batch_index + 1)
-
-            # Store
-            y_pred_list.extend(y_pred.detach())
-            y_test_list.extend(batch_dict['y'].detach())
 
         self.train_state['test_loss'] = running_loss
         self.train_state['test_acc'] = running_acc
@@ -205,39 +238,6 @@ class Trainer(object):
         ml_logger.info("\n==> 💯 Test performance:")
         ml_logger.info("Test loss: {0:.2f}".format(self.train_state['test_loss']))
         ml_logger.info("Test Accuracy: {0:.1f}%".format(self.train_state['test_acc']))
-
-        return y_pred_list, y_test_list
-
-    def plot_performance(self, show_plot=True):
-        # Figure size
-        plt.figure(figsize=(15,5))
-
-        # Plot Loss
-        plt.subplot(1, 2, 1)
-        plt.title("Loss")
-        plt.plot(self.train_state["train_loss"], label="train")
-        plt.plot(self.train_state["val_loss"], label="val")
-        plt.legend(loc='upper right')
-
-        # Plot Accuracy
-        plt.subplot(1, 2, 2)
-        plt.title("Accuracy")
-        plt.plot(self.train_state["train_acc"], label="train")
-        plt.plot(self.train_state["val_acc"], label="val")
-        plt.legend(loc='lower right')
-
-        # Save figure
-        plt.savefig(os.path.join(self.save_dir, "performance.png"))
-
-        # Show plots
-        if show_plot:
-            plt.show()
-
-    def save_train_state(self):
-        self.train_state["done_training"] = True
-        ml_logger.info("==> ✅ Training complete!")
-        with open(os.path.join(self.save_dir, "train_state.json"), "w") as fp:
-            json.dump(self.train_state, fp)
 
 
 def training_setup(config):
@@ -252,7 +252,7 @@ def training_setup(config):
     # Expand file paths
     config["save_dir"] = os.path.join(
         BASE_DIR, config["save_dir"], config["experiment_id"])
-    os.makedirs(config["save_dir"])
+    create_dirs(dirpath=config["save_dir"])
     config["vectorizer_file"] = os.path.join(
         config["save_dir"], config["vectorizer_file"])
     config["model_file"] = os.path.join(
@@ -264,9 +264,7 @@ def training_setup(config):
         json.dump(config, fp)
 
     # Check CUDA
-    if not torch.cuda.is_available():
-        config["device"] = False
-    config["device"] = torch.device("cuda" if config["cuda"] else "cpu")
+    config["device"] = check_cuda(cuda=config["cuda"])
 
     return config
 
@@ -302,15 +300,15 @@ def training_operations(config):
     # Training
     trainer = Trainer(
         dataset=dataset, model=model, model_file=config["model_file"],
-        save_dir=config["save_dir"], device=config["device"],
-        shuffle=config["shuffle"], num_epochs=config["num_epochs"],
-        batch_size=config["batch_size"], learning_rate=config["learning_rate"],
+        device=config["device"], shuffle=config["shuffle"],
+        num_epochs=config["num_epochs"], batch_size=config["batch_size"],
+        learning_rate=config["learning_rate"],
         early_stopping_criteria=config["early_stopping_criteria"])
     trainer.run_train_loop()
 
-    # Testing
-    y_pred, y_test = trainer.run_test_loop()
+    # Test performance
+    trainer.run_test_loop()
 
     # Save all results
-    trainer.save_train_state()
+    save_train_state(train_state=trainer.train_state, save_dir=config["save_dir"])
 
