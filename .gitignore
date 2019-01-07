@@ -10,6 +10,7 @@ __pycache__/
 data/
 experiments/
 logs/
+*.log
 
 # C extensions
 *.so

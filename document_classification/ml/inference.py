@@ -8,7 +8,7 @@ from document_classification.config import BASE_DIR
 from document_classification.ml.utils import collate_fn
 from document_classification.ml.preprocess import preprocess_data
 from document_classification.ml.vectorizer import Vectorizer
-from document_classification.ml.dataset import InferenceDataset, sample
+from document_classification.ml.dataset import Dataset
 from document_classification.ml.model import initialize_model
 
 class Inference(object):
@@ -67,9 +67,9 @@ def inference_operations(experiment_id, X):
 
     # Create inference dataset
     y = list(vectorizer.y_vocab.token_to_idx.keys())[0] # random filler y
-    infer_df = pd.DataFrame([[X, y]], columns=['X', 'y'])
+    infer_df = pd.DataFrame([[X, y, "infer"]], columns=['X', 'y', 'split'])
     infer_df = preprocess_data(df=infer_df)
-    infer_dataset = InferenceDataset(df=infer_df, vectorizer=vectorizer)
+    infer_dataset = Dataset(df=infer_df, vectorizer=vectorizer, infer=True)
 
     # Predict
     results = inference.predict(dataset=infer_dataset)

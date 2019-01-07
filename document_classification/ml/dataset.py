@@ -11,29 +11,35 @@ from document_classification.ml.vocabulary import Vocabulary, SequenceVocabulary
 from document_classification.ml.vectorizer import Vectorizer
 
 class Dataset(Dataset):
-    def __init__(self, df, vectorizer):
+    def __init__(self, df, vectorizer, infer=False):
         self.df = df
         self.vectorizer = vectorizer
 
         # Data splits
-        self.train_df = self.df[self.df.split=='train']
-        self.train_size = len(self.train_df)
-        self.val_df = self.df[self.df.split=='val']
-        self.val_size = len(self.val_df)
-        self.test_df = self.df[self.df.split=='test']
-        self.test_size = len(self.test_df)
-        self.lookup_dict = {'train': (self.train_df, self.train_size),
-                            'val': (self.val_df, self.val_size),
-                            'test': (self.test_df, self.test_size)}
-        self.set_split('train')
+        if not infer:
+            self.train_df = self.df[self.df.split=='train']
+            self.train_size = len(self.train_df)
+            self.val_df = self.df[self.df.split=='val']
+            self.val_size = len(self.val_df)
+            self.test_df = self.df[self.df.split=='test']
+            self.test_size = len(self.test_df)
+            self.lookup_dict = {'train': (self.train_df, self.train_size),
+                                'val': (self.val_df, self.val_size),
+                                'test': (self.test_df, self.test_size)}
+            self.set_split('train')
 
-        # Class weights (for imbalances)
-        class_counts = df.y.value_counts().to_dict()
-        def sort_key(item):
-            return self.vectorizer.y_vocab.lookup_token(item[0])
-        sorted_counts = sorted(class_counts.items(), key=sort_key)
-        frequencies = [count for _, count in sorted_counts]
-        self.class_weights = 1.0 / torch.tensor(frequencies, dtype=torch.float32)
+            # Class weights (for imbalances)
+            class_counts = df.y.value_counts().to_dict()
+            def sort_key(item):
+                return self.vectorizer.y_vocab.lookup_token(item[0])
+            sorted_counts = sorted(class_counts.items(), key=sort_key)
+            frequencies = [count for _, count in sorted_counts]
+            self.class_weights = 1.0 / torch.tensor(frequencies, dtype=torch.float32)
+        elif infer:
+            self.infer_df = self.df[self.df.split=="infer"]
+            self.infer_size = len(self.infer_df)
+            self.lookup_dict = {'infer': (self.infer_df, self.infer_size)}
+            self.set_split('infer')
 
     @classmethod
     def load_dataset_and_make_vectorizer(cls, df):
@@ -66,39 +72,6 @@ class Dataset(Dataset):
 
     def __getitem__(self, index):
         row = self.target_df.iloc[index]
-        X = self.vectorizer.vectorize(row.X)
-        y = self.vectorizer.y_vocab.lookup_token(
-            row.y)
-        return {'X': X, 'y': y}
-
-    def get_num_batches(self, batch_size):
-        return len(self) // batch_size
-
-    def generate_batches(self, batch_size, collate_fn, shuffle=True,
-                         drop_last=False, device="cpu"):
-        dataloader = DataLoader(dataset=self, batch_size=batch_size,
-                                collate_fn=collate_fn, shuffle=shuffle,
-                                drop_last=drop_last)
-        for data_dict in dataloader:
-            out_data_dict = {}
-            for name, tensor in data_dict.items():
-                out_data_dict[name] = data_dict[name].to(device)
-            yield out_data_dict
-
-class InferenceDataset(Dataset):
-    def __init__(self, df, vectorizer):
-        self.df = df
-        self.vectorizer = vectorizer
-        self.target_size = len(self.df)
-
-    def __str__(self):
-        return "<Dataset(size={1})>".format(self.target_size)
-
-    def __len__(self):
-        return self.target_size
-
-    def __getitem__(self, index):
-        row = self.df.iloc[index]
         X = self.vectorizer.vectorize(row.X)
         y = self.vectorizer.y_vocab.lookup_token(
             row.y)
