@@ -32,7 +32,9 @@ curl --header "Content-Type: application/json" \
 ```bash
 curl --header "Content-Type: application/json" \
      --request POST \
-     --data '{"config_filepath": "/Users/goku/Documents/document_classification/configs/train.json"}' \
+     --data '{
+        "config_filepath": "/Users/goku/Documents/document_classification/configs/train.json"
+        }' \
      http://localhost:5000/train
 ```
 
@@ -40,7 +42,10 @@ curl --header "Content-Type: application/json" \
 ```bash
 curl --header "Content-Type: application/json" \
      --request POST \
-     --data '{"experiment_id": "latest", "X": "Global warming is an increasing threat and scientists are working to find a solution."}' \
+     --data '{
+        "experiment_id": "latest",
+        "X": "Global warming is an increasing threat and scientists are working to find a solution."
+        }' \
      http://localhost:5000/infer
 ```
 
