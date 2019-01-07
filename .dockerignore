@@ -7,9 +7,9 @@ __pycache__/
 *$py.class
 
 # Data
-**/data
 **/experiments
 **/logs
+*.log
 
 # C extensions
 *.so
