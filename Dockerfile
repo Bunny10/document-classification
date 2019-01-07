@@ -126,5 +126,6 @@ WORKDIR $DIR/
 RUN pip install -r requirements.txt && \
     python setup.py develop
 ENV DIR ${DIR}
-CMD python ${DIR}/document_classification/application.py
+WORKDIR $DIR/document_classification
+CMD gunicorn -c gunicorn_config.py application
 

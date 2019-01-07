@@ -1,20 +1,18 @@
 import os
 from flask_caching import Cache
-from document_classification.utils import setup_logger, create_dirs
+from document_classification.utils import create_dirs, setup_logger
 
 # Base directory
 BASE_DIR = os.path.dirname(__file__)
 
 # Loggers
 log_dir = os.path.join(BASE_DIR, 'logs'); create_dirs(log_dir)
-flask_logger = setup_logger(name='werkzeug',
-                            log_file=os.path.join(log_dir, 'flask.log'))
-ml_logger = setup_logger(name='ml',
-                         log_file=os.path.join(log_dir, 'ml.log'))
+ml_logger = setup_logger(name='ml', log_file=os.path.join(log_dir, 'ml.log'))
 
 # Cache
 cache = Cache(config={'CACHE_TYPE': 'simple'})
 
+# Flask
 class FlaskConfig(object):
     """
     """

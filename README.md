@@ -9,13 +9,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 pip install torch==1.0.0
 python setup.py develop
-python document_classification/application.py
+cd document_classification
+gunicorn -c gunicorn_config.py application
 ```
 
 ### Set up with docker
 ```bash
-docker build -t document_classification:cpu --build-arg DIR="/Users/goku/Documents/document_classification" -f Dockerfile.cpu .
-docker run -d -p 5000:5000 --name document_classification document_classification:cpu
+docker build -t document_classification:latest --build-arg DIR="/Users/goku/Documents/document_classification" -f Dockerfile .
+docker run -d -p 5000:5000 --name document_classification document_classification:latest
 docker exec -it document_classification /bin/bash
 ```
 
@@ -30,17 +31,16 @@ curl --header "Content-Type: application/json" \
 - Training `POST /train`
 ```bash
 curl --header "Content-Type: application/json" \
-     --header "config_filepath: /Users/goku/Documents/document_classification/configs/train.json" \
      --request POST \
+     --data '{"config_filepath": "/Users/goku/Documents/document_classification/configs/train.json"}' \
      http://localhost:5000/train
 ```
 
 - Inference `POST /infer`
 ```bash
 curl --header "Content-Type: application/json" \
-     --header "experiment_id: latest" \
-     --header "X: Global warming is an increasing threat and scientists are working to find a solution." \
      --request POST \
+     --data '{"experiment_id": "latest", "X": "Global warming is an increasing threat and scientists are working to find a solution."}' \
      http://localhost:5000/infer
 ```
 

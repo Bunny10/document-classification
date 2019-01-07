@@ -31,7 +31,6 @@ def internal_error(error):
     status = 500
     return make_response(jsonify(resp), status)
 
-
 if __name__ == "__main__":
     application.run(host=application.config['HOST'],
                     port=application.config['PORT'])
