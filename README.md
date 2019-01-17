@@ -10,7 +10,7 @@ pip install -r requirements.txt
 pip install torch==1.0.0
 python setup.py develop
 cd document_classification
-gunicorn -c gunicorn_config.py application
+gunicorn -c gunicorn_config.py wsgi
 ```
 
 ### Set up with docker
@@ -23,58 +23,58 @@ docker exec -it document_classification /bin/bash
 ### API endpoints
 - Health check `GET /api`
 ```bash
-curl --header "Content-Type: application/json" \
-     --request GET \
-     http://localhost:5000/
+curl -X GET \
+     http://localhost:5000/ \
+     -H "Content-Type: application/json"
 ```
 
 - Training `POST /train`
 ```bash
-curl --header "Content-Type: application/json" \
-     --request POST \
-     --data '{
+curl -X POST \
+     http://localhost:5000/train \
+     -H "Content-Type: application/json" \
+     -d '{
         "config_filepath": "/Users/goku/Documents/document_classification/configs/train.json"
-        }' \
-     http://localhost:5000/train
+        }'
 ```
 
 - Inference `POST /infer`
 ```bash
-curl --header "Content-Type: application/json" \
-     --request POST \
-     --data '{
+curl -X POST \
+     http://localhost:5000/infer \
+     -H "Content-Type: application/json" \
+     -d '{
         "experiment_id": "latest",
         "X": "Global warming is an increasing threat and scientists are working to find a solution."
-        }' \
-     http://localhost:5000/infer
+        }'
 ```
 
 - List of experiments `GET /experiments`
 ```bash
-curl --header "Content-Type: application/json" \
-     --request GET \
-     http://localhost:5000/experiments
+curl -X GET \
+     http://localhost:5000/experiments \
+     -H "Content-Type: application/json"
 ```
 
 - Experiment info `GET /info/<experiment_id>`
 ```bash
-curl --header "Content-Type: application/json" \
-     --request GET \
-     http://localhost:5000/info/latest
+curl -X GET \
+     http://localhost:5000/info/latest \
+     -H "Content-Type: application/json"
 ```
 
 - Delete an experiment `GET /delete/<experiement_id>`
 ```bash
-curl --header "Content-Type: application/json" \
-     --request GET \
-     http://localhost:5000/delete/1545593561_8371ca74-06e9-11e9-b8ca-8e0065915101
+curl -X GET \
+     http://localhost:5000/delete/1545593561_8371ca74-06e9-11e9-b8ca-8e0065915101 \
+     -H "Content-Type: application/json"
 ```
 
 - Get classes for a model `GET /classes/<experiement_id>`
 ```bash
-curl --header "Content-Type: application/json" \
-     --request GET \
-     http://localhost:5000/classes/latest
+curl -X GET \
+     http://localhost:5000/classes/latest \
+     -H "Content-Type: application/json"
 ```
 
 ### Content
@@ -112,4 +112,3 @@ curl --header "Content-Type: application/json" \
 - Dockerfile
 - Swagger API documentation
 - serving with Onnx and Caffe2
-
