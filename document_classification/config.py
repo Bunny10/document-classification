@@ -7,6 +7,7 @@ BASE_DIR = os.path.dirname(__file__)
 
 # Loggers
 log_dir = os.path.join(BASE_DIR, 'logs'); create_dirs(log_dir)
+flask_logger = setup_logger(name='werkzeug', log_file=os.path.join(log_dir, 'flask.log'))
 ml_logger = setup_logger(name='ml', log_file=os.path.join(log_dir, 'ml.log'))
 
 # Cache
