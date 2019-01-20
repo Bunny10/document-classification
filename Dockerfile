@@ -18,5 +18,4 @@ RUN pip install -r requirements.txt && \
     python setup.py develop
 ENV DIR ${DIR}
 WORKDIR $DIR/document_classification
-#ENTRYPOINT ["tail", "-f", "/dev/null"]
 CMD gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
