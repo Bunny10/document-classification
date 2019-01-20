@@ -18,7 +18,7 @@ gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --
 docker build -t document_classification:latest --build-arg DIR="$PWD" -f Dockerfile .
 docker run -d -p 5000:5000 --name document_classification document_classification:latest
 docker exec -it document_classification /bin/bash
-``
+```
 
 ### API endpoints
 - Health check `GET /api`
