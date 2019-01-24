@@ -15,7 +15,8 @@ ARG DIR
 COPY . $DIR/
 WORKDIR $DIR/
 RUN pip install -r requirements.txt && \
-    python setup.py develop
+    python3.6 setup.py develop
 ENV DIR ${DIR}
 WORKDIR $DIR/document_classification
-CMD gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
+CMD /usr/bin/python3.6 /usr/local/bin/gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
+#ENTRYPOINT ["tail", "-f", "/dev/null"]
