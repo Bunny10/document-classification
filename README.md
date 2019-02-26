@@ -14,15 +14,9 @@ gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --
 
 ### Set up with docker
 ```bash
-docker build \
-    --tag document_classification:latest \
-    --file Dockerfile .
-docker run \
-    --detach \
-    --publish 5000:5000 \
-    --name document_classification \
-    document_classification:latest
-docker exec -it document_classification /bin/bash
+docker build -t document-classification:latest -f Dockerfile .
+docker run -d -p 5000:5000 --name document-classification document-classification:latest
+docker exec -it document-classification /bin/bash
 ```
 
 ### API endpoints
