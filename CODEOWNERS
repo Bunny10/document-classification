@@ -1,16 +1,12 @@
 # @GokuMohandas is the code owner for
-# document_classification and should review any PRs
+# document-classification and should review any PRs
 * @GokuMohandas
 
-configs/                  @GokuMohandas
-datasets/                 @GokuMohandas
-document_classification/  @GokuMohandas
-.dockerignore             @GokuMohandas
-.gitignore                @GokuMohandas
-CODE_OF_CONDUCT.md        @GokuMohandas
-CODEOWNERS                @GokuMohandas
-Dockerfile                @GokuMohandas
-LICENSE                   @GokuMohandas
-README.md                 @GokuMohandas
-requirements.txt          @GokuMohandas
-setup.py                  @GokuMohandas
+src/                 @GokuMohandas
+.dockerignore        @GokuMohandas
+.gitignore           @GokuMohandas
+CODE_OF_CONDUCT.md   @GokuMohandas
+CODEOWNERS           @GokuMohandas
+Dockerfile           @GokuMohandas
+LICENSE              @GokuMohandas
+README.md            @GokuMohandas

@@ -1,4 +1,4 @@
-# document_classification Code of Conduct
+# document-classification Code of Conduct
 
 ## Our Pledge
 
