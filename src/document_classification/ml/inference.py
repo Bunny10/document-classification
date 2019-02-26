@@ -1,15 +1,17 @@
 import os
+from http import HTTPStatus
 import json
 import numpy as np
 import pandas as pd
 import torch
 
-from document_classification.config import BASE_DIR
-from document_classification.ml.utils import collate_fn
-from document_classification.ml.preprocess import preprocess_data
+from document_classification.config import EXPERIMENTS_DIR, ml_logger
+from document_classification.utils import load_json
 from document_classification.ml.vectorizer import Vectorizer
-from document_classification.ml.dataset import Dataset
 from document_classification.ml.model import initialize_model
+from document_classification.ml.dataset import InferenceDataset
+from document_classification.ml.preprocess import preprocess_data
+from document_classification.ml.utils import collate_fn
 
 class Inference(object):
     def __init__(self, model, vectorizer, device="cpu"):
@@ -27,30 +29,27 @@ class Inference(object):
         # Predict
         for batch_index, batch_dict in enumerate(batch_generator):
             # compute the output
-            y_pred =  self.model(batch_dict['X'], apply_softmax=True)
+            y_pred =  self.model(batch_dict["X"], apply_softmax=True)
 
             # Top k nationalities
             y_prob, indices = torch.topk(y_pred, k=len(self.vectorizer.y_vocab))
-            probabilities = y_prob.detach().to('cpu').numpy()[0]
-            indices = indices.detach().to('cpu').numpy()[0]
+            probabilities = y_prob.detach().to("cpu").numpy()[0]
+            indices = indices.detach().to("cpu").numpy()[0]
 
-            results = []
+            predictions = []
             for probability, index in zip(probabilities, indices):
                 y = self.vectorizer.y_vocab.lookup_index(index)
-                results.append({'y': y, 'probability': np.float64(probability)})
+                predictions.append({"y": y, "probability": np.float64(probability)})
 
-        return results
+        return predictions
 
 
 def inference_operations(experiment_id, X):
     """Inference operations.
     """
-
-    # Load train config
-    config_filepath = os.path.join(
-        BASE_DIR, "experiments", experiment_id, "config.json")
-    with open(config_filepath, 'r') as fp:
-        config = json.load(fp)
+    # Load config
+    config_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "config.json")
+    config = load_json(filepath=config_filepath)
 
     # Load vectorizer
     with open(config["vectorizer_file"]) as fp:
@@ -61,17 +60,28 @@ def inference_operations(experiment_id, X):
 
     # Load model
     model.load_state_dict(torch.load(config["model_file"]))
+    model = model.to("cpu")
 
     # Initialize inference
     inference = Inference(model=model, vectorizer=vectorizer)
 
-    # Create inference dataset
-    y = list(vectorizer.y_vocab.token_to_idx.keys())[0] # random filler y
-    infer_df = pd.DataFrame([[X, y, "infer"]], columns=['X', 'y', 'split'])
-    infer_df = preprocess_data(df=infer_df)
-    infer_dataset = Dataset(df=infer_df, vectorizer=vectorizer, infer=True)
+    # Filler input
+    filler_class = list(vectorizer.y_vocab.token_to_idx.keys())[0] # random filler y
 
-    # Predict
-    results = inference.predict(dataset=infer_dataset)
+    # Infer
+    infer_df = pd.DataFrame([[X, filler_class]], columns=["X", "y"])
+    infer_df = preprocess_data(df=infer_df)
+    infer_dataset = InferenceDataset(df=infer_df, vectorizer=vectorizer)
+    predictions = inference.predict(dataset=infer_dataset)
+
+    # Results
+    results = {
+        "message": HTTPStatus.OK.phrase,
+        "status-code": HTTPStatus.OK,
+        "data": {
+            "predictions": predictions,
+            "X": infer_df["X"][0]
+        }
+    }
 
     return results

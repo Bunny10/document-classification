@@ -14,9 +14,9 @@ class DocumentClassificationModel(nn.Module):
         super(DocumentClassificationModel, self).__init__()
 
         # Emebddings
-        self.embeddings = nn.Embedding(embedding_dim=embedding_dim,
-                                       num_embeddings=num_embeddings,
-                                       padding_idx=padding_idx)
+        self.embeddings = nn.Embedding(
+            embedding_dim=embedding_dim, num_embeddings=num_embeddings,
+            padding_idx=padding_idx)
 
         # Conv weights
         self.conv = nn.ModuleList([nn.Conv1d(num_input_channels, num_channels,
@@ -28,7 +28,7 @@ class DocumentClassificationModel(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, x_in, channel_first=False, apply_softmax=False):
-
+        """Forward pass."""
         # Embed
         x_in = self.embeddings(x_in)
 
@@ -58,9 +58,7 @@ class DocumentClassificationModel(nn.Module):
 
 
 def initialize_model(config, vectorizer):
-    """Initialize the model.
-    """
-    ml_logger.info("\n==> 🚀 Initializing model:")
+    """Initialize the model."""
     model = DocumentClassificationModel(
         embedding_dim=config["embedding_dim"],
         num_embeddings=len(vectorizer.X_vocab),
@@ -70,6 +68,5 @@ def initialize_model(config, vectorizer):
         num_classes=len(vectorizer.y_vocab),
         dropout_p=config["fc"]["dropout_p"],
         padding_idx=vectorizer.X_vocab.mask_index)
-    ml_logger.info(model.named_modules)
+    ml_logger.info("==> Initialized model:\n{0}".format(model.named_modules))
     return model
-

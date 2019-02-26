@@ -11,39 +11,33 @@ from document_classification.ml.vocabulary import Vocabulary, SequenceVocabulary
 from document_classification.ml.vectorizer import Vectorizer
 
 class Dataset(Dataset):
-    def __init__(self, df, vectorizer, infer=False):
+    def __init__(self, df, vectorizer):
         self.df = df
         self.vectorizer = vectorizer
 
         # Data splits
-        if not infer:
-            self.train_df = self.df[self.df.split=='train']
-            self.train_size = len(self.train_df)
-            self.val_df = self.df[self.df.split=='val']
-            self.val_size = len(self.val_df)
-            self.test_df = self.df[self.df.split=='test']
-            self.test_size = len(self.test_df)
-            self.lookup_dict = {'train': (self.train_df, self.train_size),
-                                'val': (self.val_df, self.val_size),
-                                'test': (self.test_df, self.test_size)}
-            self.set_split('train')
+        self.train_df = self.df[self.df.split=="train"]
+        self.train_size = len(self.train_df)
+        self.val_df = self.df[self.df.split=="val"]
+        self.val_size = len(self.val_df)
+        self.test_df = self.df[self.df.split=="test"]
+        self.test_size = len(self.test_df)
+        self.lookup_dict = {"train": (self.train_df, self.train_size),
+                            "val": (self.val_df, self.val_size),
+                            "test": (self.test_df, self.test_size)}
+        self.set_split("train")
 
-            # Class weights (for imbalances)
-            class_counts = df.y.value_counts().to_dict()
-            def sort_key(item):
-                return self.vectorizer.y_vocab.lookup_token(item[0])
-            sorted_counts = sorted(class_counts.items(), key=sort_key)
-            frequencies = [count for _, count in sorted_counts]
-            self.class_weights = 1.0 / torch.tensor(frequencies, dtype=torch.float32)
-        elif infer:
-            self.infer_df = self.df[self.df.split=="infer"]
-            self.infer_size = len(self.infer_df)
-            self.lookup_dict = {'infer': (self.infer_df, self.infer_size)}
-            self.set_split('infer')
+        # Class weights (for imbalances)
+        class_counts = df.y.value_counts().to_dict()
+        def sort_key(item):
+            return self.vectorizer.y_vocab.lookup_token(item[0])
+        sorted_counts = sorted(class_counts.items(), key=sort_key)
+        frequencies = [count for _, count in sorted_counts]
+        self.class_weights = 1.0 / torch.tensor(frequencies, dtype=torch.float32)
 
     @classmethod
     def load_dataset_and_make_vectorizer(cls, df):
-        train_df = df[df.split=='train']
+        train_df = df[df.split=="train"]
         return cls(df, Vectorizer.from_dataframe(train_df))
 
     @classmethod
@@ -73,9 +67,8 @@ class Dataset(Dataset):
     def __getitem__(self, index):
         row = self.target_df.iloc[index]
         X = self.vectorizer.vectorize(row.X)
-        y = self.vectorizer.y_vocab.lookup_token(
-            row.y)
-        return {'X': X, 'y': y}
+        y = self.vectorizer.y_vocab.lookup_token(row.y)
+        return {"X": X, "y": y}
 
     def get_num_batches(self, batch_size):
         return len(self) // batch_size
@@ -91,14 +84,22 @@ class Dataset(Dataset):
                 out_data_dict[name] = data_dict[name].to(device)
             yield out_data_dict
 
+
+class InferenceDataset(Dataset):
+    def __init__(self, df, vectorizer):
+        self.target_df = df
+        self.target_split = "inference"
+        self.vectorizer = vectorizer
+        self.target_size = len(self.target_df)
+
+
 def sample(dataset):
-    """Some sanity checks on the dataset.
-    """
+    """Sample from the dataset."""
     sample_idx = random.randint(0,len(dataset))
     sample = dataset[sample_idx]
-    ml_logger.info("\n==> 🔢 Dataset:")
+    ml_logger.info("==> Dataset:")
     ml_logger.info("Random sample: {0}".format(sample))
     ml_logger.info("Unvectorized X: {0}".format(
-        dataset.vectorizer.unvectorize(sample['X'])))
+        dataset.vectorizer.unvectorize(sample["X"])))
     ml_logger.info("Unvectorized y: {0}".format(
-        dataset.vectorizer.y_vocab.lookup_index(sample['y'])))
+        dataset.vectorizer.y_vocab.lookup_index(sample["y"])))

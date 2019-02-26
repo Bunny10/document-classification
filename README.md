@@ -4,10 +4,9 @@ Document classification using PyTorch. This repository was made using the [produ
 
 ### Set up with virtualenv
 ```
+cd src
 virtualenv -p python3.6 venv
 source venv/bin/activate
-pip install -r requirements.txt
-pip install torch==1.0.0
 python setup.py develop
 cd document_classification
 gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
@@ -15,66 +14,72 @@ gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --
 
 ### Set up with docker
 ```bash
-docker build -t document_classification:latest --build-arg DIR="$PWD" -f Dockerfile .
-docker run -d -p 5000:5000 --name document_classification document_classification:latest
+docker build \
+    --tag document_classification:latest \
+    --file Dockerfile .
+docker run \
+    --detach \
+    --publish 5000:5000 \
+    --name document_classification \
+    document_classification:latest
 docker exec -it document_classification /bin/bash
 ```
 
 ### API endpoints
 - Health check `GET /api`
 ```bash
-curl -X GET \
-     http://localhost:5000/ \
-     -H "Content-Type: application/json"
+curl --request GET \
+     --url http://localhost:5000/document-classification
 ```
 
 - Training `POST /train`
 ```bash
-curl -X POST \
-     http://localhost:5000/train \
-     -H "Content-Type: application/json" \
-     -d '{
-        "config_filepath": "/Users/goku/Documents/document_classification/configs/train.json"
+curl --request POST \
+     --url http://localhost:5000/document-classification/train \
+     --header "Content-Type: application/json" \
+     --data '{
+        "config_file": "train.json"
         }'
 ```
 
 - Inference `POST /infer`
 ```bash
-curl -X POST \
-     http://localhost:5000/infer \
-     -H "Content-Type: application/json" \
-     -d '{
-        "experiment_id": "latest",
+curl --request POST \
+     --url http://localhost:5000/document-classification/infer/latest \
+     --header "Content-Type: application/json" \
+     --data '{
         "X": "Global warming is an increasing threat and scientists are working to find a solution."
         }'
 ```
 
 - List of experiments `GET /experiments`
 ```bash
-curl -X GET \
-     http://localhost:5000/experiments \
-     -H "Content-Type: application/json"
+curl --request GET \
+     --url http://localhost:5000/document-classification/experiments
 ```
 
 - Experiment info `GET /info/<experiment_id>`
 ```bash
-curl -X GET \
-     http://localhost:5000/info/latest \
-     -H "Content-Type: application/json"
-```
-
-- Delete an experiment `GET /delete/<experiement_id>`
-```bash
-curl -X GET \
-     http://localhost:5000/delete/1545593561_8371ca74-06e9-11e9-b8ca-8e0065915101 \
-     -H "Content-Type: application/json"
+curl --request GET \
+     --url http://localhost:5000/document-classification/info/latest
 ```
 
 - Get classes for a model `GET /classes/<experiement_id>`
 ```bash
-curl -X GET \
-     http://localhost:5000/classes/latest \
-     -H "Content-Type: application/json"
+curl --request GET \
+     --url http://localhost:5000/document-classification/classes/latest
+```
+
+- Performance across classes `GET /document-classification/performance/<experiment_id>`
+```bash
+curl --request GET \
+     http://localhost:5000/document-classification/performance/latest
+```
+
+- Delete an experiment `GET /delete/<experiement_id>`
+```bash
+curl --request GET \
+     --url http://localhost:5000/document-classification/delete/1551157471_006209fa-3984-11e9-95c0-8c8590964109
 ```
 
 ### Content
