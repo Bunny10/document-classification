@@ -1,20 +1,29 @@
 import os
 import collections
+import json
 import numpy as np
 import pandas as pd
 
 from document_classification.config import ml_logger
 
 def split_data(df, shuffle, train_size, val_size, test_size):
-    """Split the data into train/val/test splits.
-    """
+    """Split the data into train/val/test splits."""
     # Split by category
-    by_category = collections.defaultdict(list)
+    items = collections.defaultdict(list)
     for _, row in df.iterrows():
-        by_category[row.y].append(row.to_dict())
-    ml_logger.info("\n==> 🛍️  Categories:")
+        items[row.y].append(row.to_dict())
+
+    # Clean
+    min_samples_per_class = 5
+    by_category = {k: v for k, v in items.items() if len(v) >= min_samples_per_class}
+
+    # Class counts
+    class_counts = {}
     for category in by_category:
-        ml_logger.info("{0}: {1}".format(category, len(by_category[category])))
+        class_counts[category] = len(by_category[category])
+
+    ml_logger.info("==> Classes:\n{0}".format(
+        json.dumps(class_counts, indent=4, sort_keys=True)))
 
     # Create split data
     final_list = []
@@ -39,7 +48,8 @@ def split_data(df, shuffle, train_size, val_size, test_size):
 
     # df with split datasets
     split_df = pd.DataFrame(final_list)
-    ml_logger.info("\n==> 🖖 Splits:")
-    ml_logger.info(split_df["split"].value_counts())
+
+    # Log split sizes
+    ml_logger.info("==> Splits:\n{0}".format(split_df["split"].value_counts()))
 
     return split_df

@@ -7,7 +7,6 @@ import torch
 
 class Vocabulary(object):
     def __init__(self, token_to_idx=None):
-
         # Token to index
         if token_to_idx is None:
             token_to_idx = {}
@@ -82,13 +81,6 @@ class SequenceVocabulary(Vocabulary):
     def lookup_token(self, token):
         return self.token_to_idx.get(token, self.unk_index)
 
-    def lookup_index(self, index):
-        if index not in self.idx_to_token:
-            raise KeyError("the index (%d) is not in the SequenceVocabulary" % index)
-        return self.idx_to_token[index]
-
     def __str__(self):
         return "<SequenceVocabulary(size=%d)>" % len(self.token_to_idx)
 
-    def __len__(self):
-        return len(self.token_to_idx)
