@@ -95,6 +95,7 @@ curl --request GET \
 ```
 
 ### Directory structure
+```bash
 ├── src/
 |   ├── **api**: holds all API scripts
 |   |   ├── *endpoints.py*: API endpoint definitions
@@ -126,3 +127,4 @@ curl --request GET \
 |   ├── *CODEOWNERS*: code owner assignments
 |   ├── *LICENSE*: license description
 |   └── *README.md*: repository readme
+```
