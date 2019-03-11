@@ -97,7 +97,7 @@ curl --request GET \
 ### Directory structure
 ```
 src/
-├── api/                      - holds all API scripts
+├── [api]()/                      - holds all API scripts
 |   ├── endpoints.py            - API endpoint definitions
 |   └── utils.py                - utility functions for endpoints
 ├── datasets/                 - directory to hold datasets
