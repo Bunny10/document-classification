@@ -1,24 +1,23 @@
 {
   "seed": 1234,
   "cuda": false,
-  "data_file": "news.csv",
   "shuffle": true,
   "train_size": 0.7,
   "val_size": 0.15,
   "test_size": 0.15,
+  "data_file": "news.csv",
   "vectorizer_file": "vectorizer.json",
   "model_file": "model.pth",
-  "save_dir": "experiments",
   "num_epochs": 10,
   "early_stopping_criteria": 5,
   "learning_rate": 1e-3,
-  "batch_size": 128,
+  "batch_size": 32,
   "embedding_dim": 100,
   "cnn": {
-    "num_filters": 50
+    "num_filters": 100
   },
   "fc": {
-    "hidden_dim": 50,
-    "dropout_p": 0.5
+    "hidden_dim": 100,
+    "dropout_p": 0.0
   }
 }

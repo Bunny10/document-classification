@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 FROM ubuntu:16.04
 # FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04 for CUDA9.0
-LABEL maintainer="Goku Mohandas <learnpracticalai@gmail.com.com>" \
+LABEL maintainer="practicalAI <learnpracticalai.com>" \
       version="1.0"
 
 # ==============================================================================
@@ -48,33 +48,6 @@ RUN DEBIAN_FRONTEND=noninteractive $APT_INSTALL \
         setuptools
 
 # ==============================================================================
-# 🔬 Scientific computing
-# ==============================================================================
-RUN $PIP_INSTALL \
-        numpy \
-        scipy \
-        pandas \
-        scikit-learn \
-        matplotlib
-
-# ==============================================================================
-# 📓 Jupyter notebook
-# ------------------------------------------------------------------------------
-RUN $PIP_INSTALL \
-        jupyter
-
-# ==============================================================================
-# 🔥 PyTorch
-# ------------------------------------------------------------------------------
-RUN $PIP_INSTALL \
-        numpy \
-        torchvision_nightly \
-        && \
-    $PIP_INSTALL \
-        torch_nightly -f \
-        https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
-
-# ==============================================================================
 # 🛁 Clean up
 # ------------------------------------------------------------------------------
 RUN ldconfig && \
@@ -85,7 +58,7 @@ RUN ldconfig && \
 # ==============================================================================
 # 🚢 Ports
 # ------------------------------------------------------------------------------
-EXPOSE 8888 6006 5000
+EXPOSE 3000
 
 # ==============================================================================
 # 📖 Document classification
@@ -94,5 +67,5 @@ COPY src/ $PWD/src/
 WORKDIR $PWD/src/
 RUN python3.6 setup.py develop
 WORKDIR $PWD/src/document_classification
-CMD /usr/bin/python3.6 /usr/local/bin/gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
+CMD /usr/bin/python3.6 /usr/local/bin/gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:3000 --access-logfile - --error-logfile - --reload wsgi
 #ENTRYPOINT ["tail", "-f", "/dev/null"]

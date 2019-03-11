@@ -153,7 +153,7 @@ def get_classes(experiment_id):
     return results
 
 
-def performance(experiment_id):
+def get_performance(experiment_id):
     """Test performance from all classes for a trained model."""
     # Validate experiment id
     try:
@@ -179,6 +179,11 @@ def performance(experiment_id):
 
 def delete_experiment(experiment_id):
     """Delete an experiment."""
+    try:
+        experiment_id = validate_experiment_id(experiment_id)
+    except ValueError as e:
+        return {"message": str(e), "status-code": HTTPStatus.INTERNAL_SERVER_ERROR}
+
     # Delete the experiment dir
     experiment_dir = os.path.join(EXPERIMENTS_DIR, experiment_id)
     shutil.rmtree(experiment_dir)

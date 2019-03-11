@@ -5,7 +5,7 @@ from http import HTTPStatus
 import json
 
 from document_classification.config import ml_logger
-from document_classification.api.utils import train, infer, performance, \
+from document_classification.api.utils import train, infer, get_performance, \
     get_classes, get_valid_experiment_ids, experiment_info, delete_experiment
 
 # Define blueprint
@@ -58,9 +58,9 @@ def _train():
 
 
 # Inference
-@_api.route("/document-classification/infer", methods=["POST"])
-@_api.route("/document-classification/infer/<experiment_id>", methods=["POST"])
-def _infer(experiment_id="latest"):
+@_api.route("/document-classification/predict", methods=["POST"])
+@_api.route("/document-classification/predict/<experiment_id>", methods=["POST"])
+def _predict(experiment_id="latest"):
     """Inference where the inputs is a pdf file."""
     # Get inputs
     X = request.json["X"]
@@ -166,7 +166,7 @@ def _classes(experiment_id="latest"):
 def _performance(experiment_id="latest"):
     """Test performance metrics across all classes."""
     # Get performance
-    results = performance(experiment_id=experiment_id)
+    results = get_performance(experiment_id=experiment_id)
 
     # Construct response
     response = {
