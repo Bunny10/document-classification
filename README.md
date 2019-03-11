@@ -98,23 +98,23 @@ curl --request GET \
 ```
 src/
 ├── api/                      - holds all API scripts
-|   ├── endpoints.py          - API endpoint definitions
-|   └── utils.py              - utility functions for endpoints
+|   ├── endpoints.py            - API endpoint definitions
+|   └── utils.py                - utility functions for endpoints
 ├── datasets/                 - directory to hold datasets
 ├── configs/                  - configuration files
-|   ├── logging.json          - logger configuration
-|   └── training.json         - training configuration
+|   ├── logging.json            - logger configuration
+|   └── training.json           - training configuration
 ├── document_classification/  - ML files
-|   ├── dataset.py            - dataset/dataloader
-|   ├── inference.py          - inference operations
-|   ├── load.py               - load the data
-|   ├── model.py              - model architecture
-|   ├── preprocess.py         - preprocess the data
-|   ├── split.py              - split the data
-|   ├── training.py           - train the model
-|   ├── utils.py              - utility functions
-|   ├── vectorizer.py         - vectorize the processed data
-|   └── vocabulary.py         - vocabulary to vectorize data
+|   ├── dataset.py              - dataset/dataloader
+|   ├── inference.py            - inference operations
+|   ├── load.py                 - load the data
+|   ├── model.py                - model architecture
+|   ├── preprocess.py           - preprocess the data
+|   ├── split.py                - split the data
+|   ├── training.py             - train the model
+|   ├── utils.py                - utility functions
+|   ├── vectorizer.py           - vectorize the processed data
+|   └── vocabulary.py           - vocabulary to vectorize data
 ├── application.py            - application script
 ├── config.py                 - application configuration
 ├── requirements.txt          - python package requirements
@@ -126,5 +126,5 @@ src/
 ├── CODE_OF_CONDUCT.md        - code of conduct
 ├── CODEOWNERS                - code owner assignments
 ├── LICENSE                   - license description
-└── README.md.                - repository readme
+└── README.md                 - repository readme
 ```
