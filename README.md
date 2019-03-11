@@ -32,8 +32,10 @@ curl --request POST \
 ```python
 from api.utils import predict
 X = "Global warming is an increasing threat and scientists are working to find a solution."
-predictions = predict(experiment_id="latest", X)["data"]["predictions"]
-print (predictions)
+predictions = predict(experiment_id="latest", X=X)["data"]["predictions"]
+
+>>> print (predictions)
+[{'y': 'Sci/Tech', 'probability': 0.6540133357048035}, {'y': 'Business', 'probability': 0.339420884847641}, {'y': 'World', 'probability': 0.003702996065840125}, {'y': 'Sports', 'probability': 0.002862769179046154}]
 ```
 
 ### API endpoints
