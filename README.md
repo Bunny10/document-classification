@@ -5,7 +5,7 @@ Document classification using PyTorch. This repository was made using the [produ
 ### Set up with virtualenv
 ```
 cd src
-virtualenv -p python3.6 venv
+virtualenv -p python3 venv
 source venv/bin/activate
 python setup.py develop
 cd document_classification
@@ -32,17 +32,17 @@ curl --request POST \
      --url http://localhost:5000/document-classification/train \
      --header "Content-Type: application/json" \
      --data '{
-        "config_file": "train.json"
+        "config_file": "training.json"
         }'
 ```
 
-- Inference `POST /infer`
+- Inference `POST /predict`
 ```bash
 curl --request POST \
-     --url http://localhost:5000/document-classification/infer/latest \
+     --url http://localhost:5000/document-classification/predict/latest \
      --header "Content-Type: application/json" \
      --data '{
-        "X": "Global warming is an increasing threat and scientists are working to find a solution."
+        "X": "Pete Samprass won the tennis tournament."
         }'
 ```
 
@@ -55,19 +55,19 @@ curl --request GET \
 - Experiment info `GET /info/<experiment_id>`
 ```bash
 curl --request GET \
-     --url http://localhost:5000/document-classification/info/latest
+     --url http://localhost:5000/document-classification/info
 ```
 
 - Get classes for a model `GET /classes/<experiement_id>`
 ```bash
 curl --request GET \
-     --url http://localhost:5000/document-classification/classes/latest
+     --url http://localhost:5000/document-classification/classes
 ```
 
 - Performance across classes `GET /document-classification/performance/<experiment_id>`
 ```bash
 curl --request GET \
-     http://localhost:5000/document-classification/performance/latest
+     http://localhost:5000/document-classification/performance
 ```
 
 - Delete an experiment `GET /delete/<experiement_id>`
@@ -79,15 +79,15 @@ curl --request GET \
 ### Content
 - **datasets**: directory to hold datasets
 - **configs**: configuration files
-    - *train.json*: training configurations
-    - *infer.json*: inference configurations
+    - *logging.json*: logger configuration
+    - *training.json*: training configuration
 - **document_classification**:
     - *application.py*: application script
     - *config.py*: application configuration
     - *utils.py*: application utilities
     - **api**: holds all API scripts
-        - *api.py*: API call definitions
-        - *utils.py*: utility functions
+        - *aendpointspi.py*: API endpoint definitions
+        - *utils.py*: utility functions for endpoints
     - **ml**:
         - *dataset.py*: dataset/dataloader
         - *inference.py*: inference operations
