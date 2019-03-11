@@ -2,22 +2,42 @@ import os
 from datetime import datetime
 from http import HTTPStatus
 import json
+import logging
 import shutil
 from threading import Thread
+import time
+import uuid
 
+from config import CONFIGS_DIR, DATA_DIR, EXPERIMENTS_DIR
+from document_classification.dataset import Dataset
+from document_classification.inference import inference_operations
+from document_classification.training import training_operations, training_setup
 from document_classification.utils import load_json
-from document_classification.config import CONFIGS_DIR, DATA_DIR, EXPERIMENTS_DIR, ml_logger
-from document_classification.ml.training import training_setup, training_operations
-from document_classification.ml.inference import inference_operations
-from document_classification.ml.dataset import Dataset
+
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 def train(config_file):
     """Asynchronously train a model."""
     # Load config
     config_filepath = os.path.join(CONFIGS_DIR, config_file)
     config = load_json(filepath=config_filepath)
+
+    # Generate unique experiment ID
+    config["experiment_id"] = generate_unique_id()
+
+    # Define paths
     config["data_file"] = os.path.join(DATA_DIR, config["data_file"])
+    config["experiment_dir"] = os.path.join(EXPERIMENTS_DIR, config["experiment_id"])
+    os.makedirs(config["experiment_dir"])
+
+    # Training set up
     config = training_setup(config=config)
+
+    # Save config
+    config_fp = os.path.join(config["experiment_dir"], "config.json")
+    with open(config_fp, "w") as fp:
+        json.dump({k: config[k] for k in set(list(config.keys())) - set(["device"])}, fp)
 
     # Asynchronous call
     thread = Thread(target=training_operations, args=(config,))
@@ -34,6 +54,28 @@ def train(config_file):
     }
 
     return results
+
+
+def predict(experiment_id, X):
+    """Inference for an input."""
+    # Validate experiment id
+    try:
+        experiment_id = validate_experiment_id(experiment_id)
+    except ValueError as e:
+        return {"message": str(e), "status-code": HTTPStatus.INTERNAL_SERVER_ERROR}
+
+    # Inference operations
+    config_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "config.json")
+    results = inference_operations(config_filepath, X=X)
+
+    return results
+
+
+def generate_unique_id():
+    """Generate a unique uuid preceded by a epochtime."""
+    timestamp = int(time.time())
+    unique_id = "{}_{}".format(timestamp, uuid.uuid1())
+    return unique_id
 
 
 def get_experiment_info(experiment_id):
@@ -85,20 +127,6 @@ def validate_experiment_id(experiment_id):
         raise ValueError("Experiment id {0} is not valid.".format(experiment_id))
 
     return experiment_id
-
-
-def infer(experiment_id, X):
-    """Inference for a cmed_file."""
-    # Validate experiment id
-    try:
-        experiment_id = validate_experiment_id(experiment_id)
-    except ValueError as e:
-        return {"message": str(e), "status-code": HTTPStatus.INTERNAL_SERVER_ERROR}
-
-    # Inference operations
-    results = inference_operations(experiment_id=experiment_id, X=X)
-
-    return results
 
 
 def experiment_info(experiment_id):

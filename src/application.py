@@ -2,8 +2,8 @@ import os
 from flask import Flask, jsonify, make_response, request
 from http import HTTPStatus
 
-from document_classification.config import DevelopmentConfig, ProductionConfig
-from document_classification.api.endpoints import _api
+from config import DevelopmentConfig, ProductionConfig
+from api.endpoints import _api
 
 # Define Flask app
 application = Flask(__name__)

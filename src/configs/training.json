@@ -11,13 +11,13 @@
   "num_epochs": 10,
   "early_stopping_criteria": 5,
   "learning_rate": 1e-3,
-  "batch_size": 32,
+  "batch_size": 128,
   "embedding_dim": 100,
   "cnn": {
-    "num_filters": 100
+    "num_filters": 50
   },
   "fc": {
-    "hidden_dim": 100,
-    "dropout_p": 0.0
+    "hidden_dim": 50,
+    "dropout_p": 0.5
   }
 }

@@ -1,6 +1,6 @@
 # Document Classification
 
-Document classification using PyTorch. This repository was made using the [productionML cookiecutter](https://github.com/practicalAI/productionML) template.
+Document classification w/ PyTorch. This repository was made using the [practicalAI boilerplate](https://github.com/practicalAI/boilerplate).
 
 ### Set up with virtualenv
 ```
@@ -8,7 +8,6 @@ cd src
 virtualenv -p python3 venv
 source venv/bin/activate
 python setup.py develop
-cd document_classification
 gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
 ```
 
@@ -17,6 +16,25 @@ gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --
 docker build -t document-classification:latest -f Dockerfile .
 docker run -d -p 5000:5000 --name document-classification document-classification:latest
 docker exec -it document-classification /bin/bash
+```
+
+### Usage
+- Inference `POST /predict`
+```bash
+curl --request POST \
+     --url http://localhost:5000/document-classification/predict/latest \
+     --header "Content-Type: application/json" \
+     --data '{
+        "X": "Global warming is an increasing threat and scientists are working to find a solution."
+        }'
+```
+- Python package
+```python
+from api.utils import predict
+experiment_id = "latest"
+X = "Global warming is an increasing threat and scientists are working to find a solution."
+predictions = predict(experiment_id, X)["data"]["predictions"]
+print (predictions)
 ```
 
 ### API endpoints
@@ -42,7 +60,7 @@ curl --request POST \
      --url http://localhost:5000/document-classification/predict/latest \
      --header "Content-Type: application/json" \
      --data '{
-        "X": "Pete Samprass won the tennis tournament."
+        "X": "Global warming is an increasing threat and scientists are working to find a solution."
         }'
 ```
 
@@ -73,41 +91,35 @@ curl --request GET \
 - Delete an experiment `GET /delete/<experiement_id>`
 ```bash
 curl --request GET \
-     --url http://localhost:5000/document-classification/delete/1551157471_006209fa-3984-11e9-95c0-8c8590964109
+     --url http://localhost:5000/document-classification/delete/1552345515_21f4c3ae-4452-11e9-ab10-f0189887caab
 ```
 
-### Content
+### Directory structure
+- **api**: holds all API scripts
+    - *endpoints.py*: API endpoint definitions
+    - *utils.py*: utility functions for endpoints
 - **datasets**: directory to hold datasets
 - **configs**: configuration files
     - *logging.json*: logger configuration
     - *training.json*: training configuration
 - **document_classification**:
-    - *application.py*: application script
-    - *config.py*: application configuration
-    - *utils.py*: application utilities
-    - **api**: holds all API scripts
-        - *aendpointspi.py*: API endpoint definitions
-        - *utils.py*: utility functions for endpoints
-    - **ml**:
-        - *dataset.py*: dataset/dataloader
-        - *inference.py*: inference operations
-        - *load.py*: load the data
-        - *model.py*: model architecture
-        - *preprocess.py*: preprocess the data
-        - *split.py*: split the data
-        - *training.py*: train the model
-        - *utils.py*: utility functions
-        - *vectorizer.py*: vectorize the processed data
-        - *vocabulary.py*: vocabulary to vectorize data
-- *.gitignore*: gitignore file
-- *LICENSE*: license of choice (default is MIT)
+    - *dataset.py*: dataset/dataloader
+    - *inference.py*: inference operations
+    - *load.py*: load the data
+    - *model.py*: model architecture
+    - *preprocess.py*: preprocess the data
+    - *split.py*: split the data
+    - *training.py*: train the model
+    - *utils.py*: utility functions
+    - *vectorizer.py*: vectorize the processed data
+    - *vocabulary.py*: vocabulary to vectorize data
+- *application.py*: application script
+- *config.py*: application configuration
 - *requirements.txt*: python package requirements
 - *setup.py*: custom package setup
+- *wsgi.py*: application initialization
+- *.dockerignore*: dockerignore file
+- *.gitignore*: gitignore file
+- *Dockerfile*: Dockerfile for the application
+- *LICENSE*: license of choice (default is MIT)
 
-
-### TODO
-- experiment id validation
-- HTTPStatus code (ex. HTTPSStatus.BAD_REQUEST)
-- Dockerfile
-- Swagger API documentation
-- serving with Onnx and Caffe2

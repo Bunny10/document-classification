@@ -66,6 +66,5 @@ EXPOSE 3000
 COPY src/ $PWD/src/
 WORKDIR $PWD/src/
 RUN python3.6 setup.py develop
-WORKDIR $PWD/src/document_classification
 CMD /usr/bin/python3.6 /usr/local/bin/gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:3000 --access-logfile - --error-logfile - --reload wsgi
 #ENTRYPOINT ["tail", "-f", "/dev/null"]

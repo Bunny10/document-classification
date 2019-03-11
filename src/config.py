@@ -1,20 +1,21 @@
 import os
+import json
 import logging.config
-
-from document_classification.utils import create_dirs, load_json
 
 # Base directory
 BASE_DIR = os.path.dirname(__file__)
-DATA_DIR = os.path.join(BASE_DIR, "../datasets")
-CONFIGS_DIR = os.path.join(BASE_DIR, "../configs")
-LOGS_DIR = os.path.join(BASE_DIR, "../logs")
-EXPERIMENTS_DIR = os.path.join(BASE_DIR, "../experiments")
+DATA_DIR = os.path.join(BASE_DIR, "datasets")
+CONFIGS_DIR = os.path.join(BASE_DIR, "configs")
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+EXPERIMENTS_DIR = os.path.join(BASE_DIR, "experiments")
 
 # Loggers
-create_dirs(LOGS_DIR)
-log_config = load_json(filepath=os.path.join(CONFIGS_DIR, "logging.json"))
+if not os.path.exists(LOGS_DIR): os.makedirs(LOGS_DIR)
+log_filepath = os.path.join(CONFIGS_DIR, "logging.json")
+with open(log_filepath, "r") as fp: log_config = json.load(fp)
 logging.config.dictConfig(log_config)
 ml_logger = logging.getLogger("ml_logger")
+
 
 class FlaskConfig(object):
     """Default Flask configuration."""

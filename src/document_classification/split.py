@@ -1,10 +1,12 @@
 import os
 import collections
 import json
+import logging
 import numpy as np
 import pandas as pd
 
-from document_classification.config import ml_logger
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 def split_data(df, shuffle, train_size, val_size, test_size):
     """Split the data into train/val/test splits."""

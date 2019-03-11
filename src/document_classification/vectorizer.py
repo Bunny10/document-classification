@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from document_classification.ml.vocabulary import Vocabulary, SequenceVocabulary
+from document_classification.vocabulary import Vocabulary, SequenceVocabulary
 
 class Vectorizer(object):
     def __init__(self, X_vocab, y_vocab):

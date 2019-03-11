@@ -1,14 +1,17 @@
 import os
 import json
+import logging
 import numpy as np
 import pandas as pd
 import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from document_classification.config import ml_logger
-from document_classification.ml.vocabulary import Vocabulary, SequenceVocabulary
-from document_classification.ml.vectorizer import Vectorizer
+from document_classification.vectorizer import Vectorizer
+from document_classification.vocabulary import Vocabulary, SequenceVocabulary
+
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 class Dataset(Dataset):
     def __init__(self, df, vectorizer):
