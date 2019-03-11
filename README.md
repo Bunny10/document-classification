@@ -31,9 +31,8 @@ curl --request POST \
 - Python package
 ```python
 from api.utils import predict
-experiment_id = "latest"
 X = "Global warming is an increasing threat and scientists are working to find a solution."
-predictions = predict(experiment_id, X)["data"]["predictions"]
+predictions = predict(experiment_id="latest", X)["data"]["predictions"]
 print (predictions)
 ```
 
@@ -97,7 +96,7 @@ curl --request GET \
 ### Directory structure
 ```
 src/
-├── [api]()/                      - holds all API scripts
+├── api/                      - holds all API scripts
 |   ├── endpoints.py            - API endpoint definitions
 |   └── utils.py                - utility functions for endpoints
 ├── datasets/                 - directory to hold datasets
