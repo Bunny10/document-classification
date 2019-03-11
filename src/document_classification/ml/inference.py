@@ -68,10 +68,12 @@ def inference_operations(experiment_id, X):
     # Filler input
     filler_class = list(vectorizer.y_vocab.token_to_idx.keys())[0] # random filler y
 
-    # Infer
+    # Inference dataset
     infer_df = pd.DataFrame([[X, filler_class]], columns=["X", "y"])
     infer_df = preprocess_data(df=infer_df)
     infer_dataset = InferenceDataset(df=infer_df, vectorizer=vectorizer)
+
+    # Predict
     predictions = inference.predict(dataset=infer_dataset)
 
     # Results

@@ -42,6 +42,7 @@ def training_setup(config):
 
     return config
 
+
 def compute_accuracy(y_pred, y_target):
     _, y_pred_indices = y_pred.max(dim=1)
     n_correct = torch.eq(y_pred_indices, y_target).sum().item()
@@ -49,12 +50,11 @@ def compute_accuracy(y_pred, y_target):
 
 
 class Trainer(object):
-    def __init__(self, dataset, model, model_file, experiment_dir, device, shuffle,
+    def __init__(self, dataset, model, model_file, device, shuffle,
                num_epochs, batch_size, learning_rate, early_stopping_criteria):
         self.dataset = dataset
         self.class_weights = dataset.class_weights.to(device)
         self.model = model.to(device)
-        self.experiment_dir = experiment_dir
         self.device = device
         self.shuffle = shuffle
         self.num_epochs = num_epochs
@@ -250,10 +250,10 @@ class Trainer(object):
 
         return performance
 
-    def save_train_state(self):
+    def save_train_state(self, experiment_dir):
         self.train_state["done_training"] = True
         ml_logger.info("==> Training complete!")
-        train_state_filepath = os.path.join(self.experiment_dir, "train_state.json")
+        train_state_filepath = os.path.join(experiment_dir, "train_state.json")
         with open(train_state_filepath, "w") as fp:
             json.dump(self.train_state, fp)
 
@@ -314,9 +314,9 @@ def training_operations(config):
     # Training
     trainer = Trainer(
         dataset=dataset, model=model, model_file=config["model_file"],
-        experiment_dir=config["experiment_dir"], device=config["device"],
-        shuffle=config["shuffle"], num_epochs=config["num_epochs"],
-        batch_size=config["batch_size"], learning_rate=config["learning_rate"],
+        device=config["device"], shuffle=config["shuffle"],
+        num_epochs=config["num_epochs"], batch_size=config["batch_size"],
+        learning_rate=config["learning_rate"],
         early_stopping_criteria=config["early_stopping_criteria"])
     trainer.run_train_loop()
 
@@ -324,5 +324,5 @@ def training_operations(config):
     trainer.train_state["performance"] = trainer.run_test_loop()
 
     # Save all results
-    trainer.save_train_state()
+    trainer.save_train_state(config["experiment_dir"])
 

@@ -88,7 +88,7 @@ def validate_experiment_id(experiment_id):
 
 
 def infer(experiment_id, X):
-    """Inference for a cmed_file."""
+    """Inference for an input."""
     # Validate experiment id
     try:
         experiment_id = validate_experiment_id(experiment_id)
