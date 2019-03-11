@@ -1,17 +1,19 @@
 import os
 from http import HTTPStatus
+import logging
 import json
 import numpy as np
 import pandas as pd
 import torch
 
-from document_classification.config import EXPERIMENTS_DIR, ml_logger
-from document_classification.utils import load_json
-from document_classification.ml.vectorizer import Vectorizer
-from document_classification.ml.model import initialize_model
-from document_classification.ml.dataset import InferenceDataset
-from document_classification.ml.preprocess import preprocess_data
-from document_classification.ml.utils import collate_fn
+from document_classification.dataset import InferenceDataset
+from document_classification.model import initialize_model
+from document_classification.preprocess import preprocess_data
+from document_classification.utils import collate_fn, load_json
+from document_classification.vectorizer import Vectorizer
+
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 class Inference(object):
     def __init__(self, model, vectorizer, device="cpu"):
@@ -44,11 +46,10 @@ class Inference(object):
         return predictions
 
 
-def inference_operations(experiment_id, X):
+def inference_operations(config_filepath, X):
     """Inference operations.
     """
     # Load config
-    config_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "config.json")
     config = load_json(filepath=config_filepath)
 
     # Load vectorizer

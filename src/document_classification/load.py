@@ -1,7 +1,9 @@
 import os
+import logging
 import pandas as pd
 
-from document_classification.config import ml_logger
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 def load_data(data_file):
     """Load the data into a Pandas DataFrame."""

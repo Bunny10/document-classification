@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import numpy as np
 import pandas as pd
 from sklearn.metrics import precision_recall_fscore_support
@@ -8,32 +9,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from document_classification.config import EXPERIMENTS_DIR, ml_logger
-from document_classification.ml.utils import set_seeds, generate_unique_id, collate_fn
-from document_classification.ml.load import load_data
-from document_classification.ml.split import split_data
-from document_classification.ml.preprocess import preprocess_data
-from document_classification.ml.dataset import Dataset, sample
-from document_classification.ml.model import initialize_model, DocumentClassificationModel
+from document_classification.dataset import Dataset, sample
+from document_classification.model import initialize_model, DocumentClassificationModel
+from document_classification.load import load_data
+from document_classification.preprocess import preprocess_data
+from document_classification.split import split_data
+from document_classification.utils import set_seeds, collate_fn
+
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 def training_setup(config):
     """Set up the training configuration."""
     # Set seeds
     set_seeds(seed=config["seed"], cuda=config["cuda"])
 
-    # Generate unique experiment ID
-    config["experiment_id"] = generate_unique_id()
-
     # Expand file paths
-    config["experiment_dir"] = os.path.join(EXPERIMENTS_DIR, config["experiment_id"])
-    os.makedirs(config["experiment_dir"])
     config["vectorizer_file"] = os.path.join(config["experiment_dir"], config["vectorizer_file"])
     config["model_file"] = os.path.join(config["experiment_dir"], config["model_file"])
-
-    # Save config
-    config_fp = os.path.join(config["experiment_dir"], "config.json")
-    with open(config_fp, "w") as fp:
-        json.dump(config, fp)
 
     # Check CUDA
     if not torch.cuda.is_available():
@@ -256,35 +249,6 @@ class Trainer(object):
         train_state_filepath = os.path.join(experiment_dir, "train_state.json")
         with open(train_state_filepath, "w") as fp:
             json.dump(self.train_state, fp)
-
-
-def plot_performance(train_state, experiments_dir, show_plot=True):
-    """ Plot loss and accuracy.
-    """
-    # Figure size
-    plt.figure(figsize=(15,5))
-
-    # Plot Loss
-    plt.subplot(1, 2, 1)
-    plt.title("Loss")
-    plt.plot(train_state["train_loss"], label="train")
-    plt.plot(train_state["val_loss"], label="val")
-    plt.legend(loc='upper right')
-
-    # Plot Accuracy
-    plt.subplot(1, 2, 2)
-    plt.title("Accuracy")
-    plt.plot(train_state["train_acc"], label="train")
-    plt.plot(train_state["val_acc"], label="val")
-    plt.legend(loc='lower right')
-
-    # Save figure
-    plt.savefig(os.path.join(experiments_dir, "performance.png"))
-
-    # Show plots
-    if show_plot:
-        print ("==> Metric plots:")
-        plt.show()
 
 
 def training_operations(config):

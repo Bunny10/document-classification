@@ -1,11 +1,13 @@
 import os
+import logging
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from document_classification.config import ml_logger
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 class DocumentClassificationModel(nn.Module):
     def __init__(self, embedding_dim, num_embeddings, num_input_channels,

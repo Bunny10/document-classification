@@ -3,10 +3,14 @@ from datetime import datetime
 from flask import Blueprint, jsonify, make_response, request
 from http import HTTPStatus
 import json
+import logging
 
-from document_classification.config import ml_logger
-from document_classification.api.utils import train, infer, get_performance, \
-    get_classes, get_valid_experiment_ids, experiment_info, delete_experiment
+from api.utils import train, predict, get_performance, get_classes, \
+                      get_valid_experiment_ids, experiment_info, \
+                      delete_experiment
+
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 # Define blueprint
 _api = Blueprint("_api", __name__)
@@ -66,7 +70,7 @@ def _predict(experiment_id="latest"):
     X = request.json["X"]
 
     # Inference
-    results = infer(experiment_id=experiment_id, X=X)
+    results = predict(experiment_id=experiment_id, X=X)
 
     # Construct response
     response = {
