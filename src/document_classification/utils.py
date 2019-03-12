@@ -208,7 +208,7 @@ def model_summary(model, x, *args, **kwargs):
             model_summary_list.append("  {:<13} {:>20}".format(inner_name, str(inner_shape)))
 
     model_summary_list.append("="*100)
-    model_summary_list.append("# Params:    {0:,.2f}K".format(total_params/1000))
+    model_summary_list.append("# Params:     {0:,.2f}K".format(total_params/1000))
     model_summary_list.append("# Operations: {0:,.2f}M".format(total_macs/1000000))
     model_summary_list.append("-"*100)
     model_summary_list.append("Input:         [batch_size, ...]")
