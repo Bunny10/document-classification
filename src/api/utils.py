@@ -73,7 +73,7 @@ def predict(experiment_id, X):
 
 def generate_unique_id():
     """Generate a unique uuid preceded by a epochtime."""
-    timestamp = int(time.time())
+    timestamp = datetime.now().isoformat()
     unique_id = "{}_{}".format(timestamp, uuid.uuid1())
     return unique_id
 

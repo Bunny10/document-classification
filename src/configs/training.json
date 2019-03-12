@@ -18,6 +18,6 @@
   },
   "fc": {
     "hidden_dim": 50,
-    "dropout_p": 0.5
+    "dropout_p": 0.7
   }
 }

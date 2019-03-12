@@ -16,18 +16,21 @@ class DocumentClassificationModel(nn.Module):
         super(DocumentClassificationModel, self).__init__()
 
         # Emebddings
-        self.embeddings = nn.Embedding(
-            embedding_dim=embedding_dim, num_embeddings=num_embeddings,
-            padding_idx=padding_idx)
+        self.embeddings = nn.Embedding(embedding_dim=embedding_dim,
+                                       num_embeddings=num_embeddings,
+                                       padding_idx=padding_idx)
 
         # Conv weights
         self.conv = nn.ModuleList([nn.Conv1d(num_input_channels, num_channels,
-                                             kernel_size=f) for f in [2,3,4]])
+                                  kernel_size=f) for f in [2,3,4]])
 
         # FC weights
         self.dropout = nn.Dropout(dropout_p)
         self.fc1 = nn.Linear(num_channels*3, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, num_classes)
+
+        # Toggle to False to freeze embeddings
+        self.embeddings.weight.requires_grad = True
 
     def forward(self, x_in, channel_first=False, apply_softmax=False):
         """Forward pass."""
@@ -54,8 +57,10 @@ class DocumentClassificationModel(nn.Module):
         z = self.fc1(z)
         y_pred = self.fc2(z)
 
+        # Softmax
         if apply_softmax:
             y_pred = F.softmax(y_pred, dim=1)
+
         return y_pred
 
 

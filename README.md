@@ -1,6 +1,6 @@
 # Document Classification
 
-Document classification w/ PyTorch. This repository was made using the [practicalAI boilerplate](https://github.com/practicalAI/boilerplate).
+Document classification with PyTorch. This repository was made using the [practicalAI boilerplate](https://github.com/practicalAI/boilerplate) template.
 
 ### Set up with virtualenv
 ```
@@ -10,12 +10,26 @@ source venv/bin/activate
 python setup.py develop
 gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
 ```
+```
+tensorboard --logdir="tensorboard" --port=6006
+```
 
 ### Set up with docker
 ```bash
 docker build -t document-classification:latest -f Dockerfile .
 docker run -d -p 5000:5000 --name document-classification document-classification:latest
 docker exec -it document-classification /bin/bash
+```
+
+### Train a model
+- Training `POST /train`
+```bash
+curl --request POST \
+     --url http://localhost:5000/document-classification/train \
+     --header "Content-Type: application/json" \
+     --data '{
+        "config_file": "training.json"
+        }'
 ```
 
 ### Usage
