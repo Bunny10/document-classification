@@ -75,7 +75,7 @@ curl --request POST \
      --url http://localhost:5000/document-classification/predict/latest \
      --header "Content-Type: application/json" \
      --data '{
-        "X": "Global warming is an increasing threat and scientists are working to find a solution."
+        "X": "Global warming is inevitables, scientists warn."
         }'
 ```
 
@@ -97,16 +97,10 @@ curl --request GET \
      --url http://localhost:5000/document-classification/classes
 ```
 
-- Performance across classes `GET /document-classification/performance/<experiment_id>`
-```bash
-curl --request GET \
-     http://localhost:5000/document-classification/performance
-```
-
 - Delete an experiment `GET /delete/<experiement_id>`
 ```bash
 curl --request GET \
-     --url http://localhost:5000/document-classification/delete/1552345515_21f4c3ae-4452-11e9-ab10-f0189887caab
+     --url http://localhost:5000/document-classification/delete/2019-03-14T01:05:49.989428_fafe6eb4-462f-11e9-bfe0-f0189887caab
 ```
 
 ### Directory structure

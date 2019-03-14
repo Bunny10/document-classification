@@ -25,6 +25,8 @@ def bad_request(error):
         "status-code": HTTPStatus.BAD_REQUEST,
         "url": request.url,
         }
+    # Log
+    ml_logger.info(json.dumps(response, indent=4, sort_keys=True))
     return make_response(jsonify(response), response["status-code"])
 
 # NOT_FOUND
@@ -37,6 +39,8 @@ def not_found(error):
         "status-code": HTTPStatus.NOT_FOUND,
         "url": request.url,
         }
+    # Log
+    ml_logger.info(json.dumps(response, indent=4, sort_keys=True))
     return make_response(jsonify(response), response["status-code"])
 
 # INTERNAL_SERVER_ERROR
@@ -49,4 +53,6 @@ def internal_server_error(error):
         "status-code": HTTPStatus.INTERNAL_SERVER_ERROR,
         "url": request.url,
         }
+    # Log
+    ml_logger.info(json.dumps(response, indent=4, sort_keys=True))
     return make_response(jsonify(response), response["status-code"])

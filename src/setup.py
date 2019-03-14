@@ -10,7 +10,7 @@ setup(
     description="Document Classification Service.",
     url="https://github.com/GokuMohandas/document-classification",
     author="Goku Mohandas",
-    author_email="goku@ciitizen.com",
+    author_email="gokumd@gmail.com",
     packages=find_packages(),
     setup_requires=['Flask==1.0.2'],
     install_requires=requirements,

@@ -1,10 +1,16 @@
 import os
-from collections import OrderedDict
+import collections
 import copy
 import json
+import logging
 import numpy as np
+import pandas as pd
+import re
 import tensorflow as tf
 import torch
+
+# Logger
+ml_logger = logging.getLogger("ml_logger")
 
 def create_dirs(dirpath):
     """Creating directories."""
@@ -25,6 +31,76 @@ def set_seeds(seed, cuda):
     torch.manual_seed(seed)
     if cuda:
         torch.cuda.manual_seed_all(seed)
+
+
+def clean_text(text):
+    """Basic text preprocessing.
+    """
+    text = " ".join(word.lower() for word in text.split(" "))
+    text = text.replace("\n", " ")
+    text = re.sub(r"[^a-zA-Z_]+", r" ", text)
+    text = text.strip()
+    return text
+
+
+def train_val_test_split(df, shuffle, min_samples_per_class,
+                         train_size, val_size, test_size):
+    """Split the data into train/val/test splits."""
+    # Split by category
+    items = collections.defaultdict(list)
+    for _, row in df.iterrows():
+        items[row.y].append(row.to_dict())
+
+    # Clean
+    by_category = {k: v for k, v in items.items() if len(v) >= min_samples_per_class}
+
+    # Class counts
+    class_counts = {}
+    for category in by_category:
+        class_counts[category] = len(by_category[category])
+
+    ml_logger.info("==> Classes:\n{0}".format(
+        json.dumps(class_counts, indent=4, sort_keys=True)))
+
+    # Create split data
+    final_list = []
+    for _, item_list in sorted(by_category.items()):
+        if shuffle:
+            np.random.shuffle(item_list)
+        n = len(item_list)
+        n_train = int(train_size*n)
+        n_val = int(val_size*n)
+        n_test = int(test_size*n)
+
+      # Give data point a split attribute
+        for item in item_list[:n_train]:
+            item["split"] = "train"
+        for item in item_list[n_train:n_train+n_val]:
+            item["split"] = "val"
+        for item in item_list[n_train+n_val:]:
+            item["split"] = "test"
+
+        # Add to final list
+        final_list.extend(item_list)
+
+    # df with split datasets
+    split_df = pd.DataFrame(final_list)
+    train_df = split_df[split_df.split == "train"]
+    val_df = split_df[split_df.split == "val"]
+    test_df = split_df[split_df.split == "test"]
+
+    return train_df, val_df, test_df
+
+
+def class_weights(df, vectorizer):
+    """Get class counts for imbalances."""
+    class_counts = df.y.value_counts().to_dict()
+    def sort_key(item):
+        return vectorizer.y_vocab.lookup_token(item[0])
+    sorted_counts = sorted(class_counts.items(), key=sort_key)
+    frequencies = [count for _, count in sorted_counts]
+    class_weights = 1.0 / torch.tensor(frequencies, dtype=torch.float32)
+    return class_weights
 
 
 def pad_seq(seq, length):
@@ -62,6 +138,12 @@ def collate_fn(batch):
         processed_batch["y"])
 
     return processed_batch
+
+
+def compute_accuracy(y_pred, y_target):
+    _, y_pred_indices = y_pred.max(dim=1)
+    n_correct = torch.eq(y_pred_indices, y_target).sum().item()
+    return n_correct / len(y_pred_indices) * 100
 
 
 # Credit: https://github.com/yunjey/pytorch-tutorial
@@ -106,15 +188,13 @@ class TensorboardLogger(object):
 
 # Extended from https://github.com/nmhkahn/torchsummaryX
 def model_summary(model, x, *args, **kwargs):
-    model_summary_list = []
-
     def register_hook(module):
         def hook(module, inputs, outputs):
             cls_name = str(module.__class__).split(".")[-1].split("'")[0]
             module_idx = len(summary)
             key = "{}_{}".format(module_idx, cls_name)
 
-            info = OrderedDict()
+            info = collections.OrderedDict()
             info["id"] = id(module)
             if isinstance(outputs, (list, tuple)):
                 info["out"] = list(outputs[0].size())
@@ -122,7 +202,7 @@ def model_summary(model, x, *args, **kwargs):
                 info["out"] = list(outputs.size())
 
             info["ksize"] = "-"
-            info["inner"] = OrderedDict()
+            info["inner"] = collections.OrderedDict()
             info["params"], info["macs"] = 0, 0
             for name, param in module.named_parameters():
                 info["params"] += param.nelement()
@@ -169,7 +249,7 @@ def model_summary(model, x, *args, **kwargs):
             hooks.append(module.register_forward_hook(hook))
 
     hooks = []
-    summary = OrderedDict()
+    summary = collections.OrderedDict()
 
     model.apply(register_hook)
     with torch.no_grad():
@@ -178,13 +258,13 @@ def model_summary(model, x, *args, **kwargs):
     for hook in hooks:
         hook.remove()
 
-    model_summary_list.append("-"*100)
-    model_summary_list.append("{:<15} {:>20} {:>20} {:>20} {:>20}"
+    print ("-"*100)
+    print ("{:<15} {:>20} {:>20} {:>20} {:>20}"
         .format("Layer", "Kernel Shape", "Output Shape",
                 "# Params (K)", "# Operations (M)"))
-    model_summary_list.append("="*100)
+    print ("="*100)
     input_size = list(x.size()); input_size[0] = None
-    model_summary_list.append("{:<15} {:>20}".format("Input", str(input_size)))
+    print ("{:<15} {:>20}".format("Input", str(input_size)))
 
     total_params, total_macs = 0, 0
     for layer, info in summary.items():
@@ -200,21 +280,19 @@ def model_summary(model, x, *args, **kwargs):
             total_macs += repr_macs
             repr_macs = "{0:,.2f}".format(repr_macs/1000000)
 
-        model_summary_list.append("{:<15} {:>20} {:>20} {:>20} {:>20}"
+        print ("{:<15} {:>20} {:>20} {:>20} {:>20}"
             .format(layer, repr_ksize, repr_out, repr_params, repr_macs))
 
         # for RNN, describe inner weights (i.e. w_hh, w_ih)
         for inner_name, inner_shape in info["inner"].items():
-            model_summary_list.append("  {:<13} {:>20}".format(inner_name, str(inner_shape)))
+            print ("  {:<13} {:>20}".format(inner_name, str(inner_shape)))
 
-    model_summary_list.append("="*100)
-    model_summary_list.append("# Params:     {0:,.2f}K".format(total_params/1000))
-    model_summary_list.append("# Operations: {0:,.2f}M".format(total_macs/1000000))
-    model_summary_list.append("-"*100)
-    model_summary_list.append("Input:         [batch_size, ...]")
-    model_summary_list.append("Linear/weight: [input_hidden_dim, output_hidden_dim]")
-    model_summary_list.append("Embedding:     [num_tokens, embedding_dim]")
-    model_summary_list.append("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
-    model_summary_list.append("-"*100)
-
-    return model_summary_list
+    print ("="*100)
+    print ("# Params:     {0:,.2f}K".format(total_params/1000))
+    print ("# Operations: {0:,.2f}M".format(total_macs/1000000))
+    print ("-"*100)
+    print ("Input:         [batch_size, ...]")
+    print ("Linear/weight: [input_hidden_dim, output_hidden_dim]")
+    print ("Embedding:     [num_tokens, embedding_dim]")
+    print ("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
+    print ("-"*100)
