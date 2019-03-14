@@ -3,36 +3,33 @@ from datetime import datetime
 from http import HTTPStatus
 import json
 import logging
+import numpy as np
+import pandas as pd
 import shutil
 from threading import Thread
 import time
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 import uuid
 
 from config import CONFIGS_DIR, DATA_DIR, EXPERIMENTS_DIR
 from document_classification.dataset import Dataset
-from document_classification.inference import inference_operations
-from document_classification.training import training_operations, training_setup
-from document_classification.utils import load_json
+from document_classification.model import DocumentClassificationModel
+from document_classification.utils import class_weights, clean_text, \
+                                          collate_fn, load_json, \
+                                          model_summary, set_seeds, \
+                                          train_val_test_split
+from document_classification.vectorizer import Vectorizer
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
 
 def train(config_file):
     """Asynchronously train a model."""
-    # Load config
-    config_filepath = os.path.join(CONFIGS_DIR, config_file)
-    config = load_json(filepath=config_filepath)
-
-    # Generate unique experiment ID
-    config["experiment_id"] = generate_unique_id()
-
-    # Define paths
-    config["data_file"] = os.path.join(DATA_DIR, config["data_file"])
-    config["experiment_dir"] = os.path.join(EXPERIMENTS_DIR, config["experiment_id"])
-    os.makedirs(config["experiment_dir"])
-
-    # Training set up
-    config = training_setup(config=config)
+    # Get config
+    config = set_up(config_file)
 
     # Save config
     config_fp = os.path.join(config["experiment_dir"], "config.json")
@@ -56,6 +53,105 @@ def train(config_file):
     return results
 
 
+def set_up(config_file):
+    # Load config
+    config_filepath = os.path.join(CONFIGS_DIR, config_file)
+    config = load_json(filepath=config_filepath)
+
+    # Set seeds
+    set_seeds(seed=config["seed"], cuda=config["cuda"])
+
+    # Generate unique experiment ID
+    config["experiment_id"] = generate_unique_id()
+
+    # Define paths
+    config["data_filepath"] = os.path.join(DATA_DIR, config["data_file"])
+    config["experiment_dir"] = os.path.join(EXPERIMENTS_DIR, config["experiment_id"])
+    os.makedirs(config["experiment_dir"])
+
+    # Expand file paths
+    config["vectorizer_filepath"] = os.path.join(config["experiment_dir"], config["vectorizer_file"])
+    config["model_filepath"] = os.path.join(config["experiment_dir"], config["model_file"])
+
+    # Check CUDA
+    if not torch.cuda.is_available():
+        config["device"] = False
+    config["device"] = torch.device("cuda" if config["cuda"] else "cpu")
+
+    return config
+
+
+def training_operations(config):
+    """Training operations."""
+
+    # Load data
+    df = pd.read_csv(config["data_filepath"], header=0)
+    df.columns = ["X", "y"]
+
+    # Preprocess data
+    df.X = df.X.apply(clean_text)
+    ml_logger.info(df.head(1))
+
+    # Split data
+    train_df, val_df, test_df = train_val_test_split(
+        df=df, shuffle=True, min_samples_per_class=5,
+        train_size=0.7, val_size=0.15, test_size=0.15)
+    ml_logger.info("train: {0}, val: {1}, test: {2}".format(
+        len(train_df), len(val_df), len(test_df)))
+
+    # Vectorizer
+    vectorizer = Vectorizer()
+    vectorizer.fit(df=train_df, cutoff=0)
+
+    # Datasets
+    train_dataset = Dataset(df=train_df, vectorizer=vectorizer)
+    val_dataset = Dataset(df=val_df, vectorizer=vectorizer)
+    test_dataset = Dataset(df=test_df, vectorizer=vectorizer)
+
+    # Model
+    model = DocumentClassificationModel(embedding_dim=config["embedding_dim"],
+                                        num_embeddings=len(vectorizer.X_vocab),
+                                        num_channels=config["cnn"]["num_filters"],
+                                        hidden_dim=config["fc"]["hidden_dim"],
+                                        num_classes=len(vectorizer.y_vocab),
+                                        dropout_p=config["fc"]["dropout_p"],
+                                        padding_idx=vectorizer.X_vocab.mask_index)
+    inputs = torch.zeros((1, 18), dtype=torch.long)
+    model_summary(model, inputs)
+
+    # Compile
+    learning_rate = config["learning_rate"]
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=1)
+    loss_func = nn.CrossEntropyLoss(class_weights(train_df, vectorizer))
+    model.compile(learning_rate=learning_rate,
+                  optimizer=optimizer,
+                  scheduler=scheduler,
+                  loss_func=loss_func,
+                  collate_fn=collate_fn,
+                  device=config["device"])
+
+    # Train
+    history = model.fit(train_dataset=train_dataset,
+                        val_dataset=val_dataset,
+                        num_epochs=config["num_epochs"],
+                        batch_size=config["batch_size"])
+
+    # Evaluate
+    history["test_loss"], history["test_accuracy"], history["performance"] = \
+        model.evaluate(test_dataset)
+
+    # Save model and vectorizer
+    model.save(config["model_filepath"])
+    vectorizer.save(config["vectorizer_filepath"])
+
+    # Save history
+    with open(os.path.join(config["experiment_dir"], "history.json"), "w") as fp:
+        json.dump(history, fp)
+    ml_logger.info("==> History:\n{0}".format(
+        json.dumps(history, indent=4, sort_keys=True)))
+
+
 def predict(experiment_id, X):
     """Inference for an input."""
     # Validate experiment id
@@ -66,14 +162,41 @@ def predict(experiment_id, X):
 
     # Inference operations
     config_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "config.json")
-    results = inference_operations(config_filepath, X=X)
+    config = load_json(config_filepath)
+
+    # Load vectorizer
+    vectorizer = Vectorizer()
+    vectorizer.load(config["vectorizer_filepath"])
+
+    # Load trained model
+    model = DocumentClassificationModel(embedding_dim=config["embedding_dim"],
+                                        num_embeddings=len(vectorizer.X_vocab),
+                                        num_channels=config["cnn"]["num_filters"],
+                                        hidden_dim=config["fc"]["hidden_dim"],
+                                        num_classes=len(vectorizer.y_vocab),
+                                        dropout_p=config["fc"]["dropout_p"],
+                                        padding_idx=vectorizer.X_vocab.mask_index)
+    model.load_state_dict(torch.load(config["model_filepath"]), strict=False)
+    model = model.to("cpu")
+
+    # Predict
+    prediction = model.predict(vectorizer.vectorize(clean_text(X)), classes=vectorizer.y_vocab)
+
+    # Results
+    results = {
+        "message": HTTPStatus.OK.phrase,
+        "status-code": HTTPStatus.OK,
+        "data": {
+            "prediction": prediction,
+        }
+    }
 
     return results
 
 
 def generate_unique_id():
     """Generate a unique uuid preceded by a epochtime."""
-    timestamp = int(time.time())
+    timestamp = datetime.now().isoformat()
     unique_id = "{}_{}".format(timestamp, uuid.uuid1())
     return unique_id
 
@@ -82,41 +205,31 @@ def get_experiment_info(experiment_id):
     """ Get training info for the experiment."""
     # Define experiment info filepaths
     config_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "config.json")
-    train_state_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "train_state.json")
+    history_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "history.json")
 
     # Load files
     config = load_json(filepath=config_filepath)
-    train_state = load_json(filepath=train_state_filepath)
+    history = load_json(filepath=history_filepath)
 
     # Join info
-    experiment_info = {**config, **train_state}
+    experiment_info = {**config, **history}
 
     return experiment_info
 
 
-def get_valid_experiment_ids():
+def get_experiment_ids():
     """Get list of valid experiments."""
     # Get experiements
     experiment_ids = [f for f in os.listdir(EXPERIMENTS_DIR) \
         if os.path.isdir(os.path.join(EXPERIMENTS_DIR, f))]
 
-    # Only show valid experiments
-    valid_experiment_ids = []
-    for experiment_id in experiment_ids:
-        experiment_details = get_experiment_info(experiment_id)
-        if experiment_details["done_training"]:
-            valid_experiment_ids.append(experiment_id)
-
-    # Sort
-    valid_experiment_ids = sorted(valid_experiment_ids)
-
-    return valid_experiment_ids
+    return sorted(experiment_ids)
 
 
 def validate_experiment_id(experiment_id):
     """Validate the experiment id."""
     # Get available experiment ids
-    experiment_ids = get_valid_experiment_ids()
+    experiment_ids = get_experiment_ids()
 
     # Latest experiment_id
     if experiment_id == "latest":
@@ -165,8 +278,8 @@ def get_classes(experiment_id):
     config = load_json(filepath=config_filepath)
 
     # Get classes
-    vectorizer = Dataset.load_vectorizer_only(
-        vectorizer_filepath=config["vectorizer_file"])
+    vectorizer = Vectorizer()
+    vectorizer.load(config["vectorizer_filepath"])
     classes = list(vectorizer.y_vocab.token_to_idx.keys())
 
     # Results
@@ -175,30 +288,6 @@ def get_classes(experiment_id):
         "status-code": HTTPStatus.OK,
         "data": {
             "classes": classes
-        }
-    }
-
-    return results
-
-
-def get_performance(experiment_id):
-    """Test performance from all classes for a trained model."""
-    # Validate experiment id
-    try:
-        experiment_id = validate_experiment_id(experiment_id)
-    except ValueError as e:
-        return {"message": str(e), "status-code": HTTPStatus.INTERNAL_SERVER_ERROR}
-
-    # Load train state
-    train_state_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "train_state.json")
-    train_state = load_json(filepath=train_state_filepath)
-
-    # Results
-    results = {
-        "message": HTTPStatus.OK.phrase,
-        "status-code": HTTPStatus.OK,
-        "data": {
-            "performance": train_state["performance"]
         }
     }
 

@@ -13,8 +13,7 @@ class Vocabulary(object):
         self.token_to_idx = token_to_idx
 
         # Index to token
-        self.idx_to_token = {idx: token \
-                             for token, idx in self.token_to_idx.items()}
+        self.idx_to_token = {idx: token for token, idx in self.token_to_idx.items()}
 
     def to_serializable(self):
         return {'token_to_idx': self.token_to_idx}

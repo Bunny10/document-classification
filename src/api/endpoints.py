@@ -5,9 +5,8 @@ from http import HTTPStatus
 import json
 import logging
 
-from api.utils import train, predict, get_performance, get_classes, \
-                      get_valid_experiment_ids, experiment_info, \
-                      delete_experiment
+from api.utils import train, predict, get_classes, get_experiment_ids, \
+                      experiment_info, delete_experiment
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
@@ -95,7 +94,7 @@ def _predict(experiment_id="latest"):
 def _experiments():
     """Get a list of available valid experiments."""
     # Get ids
-    experiment_ids = get_valid_experiment_ids()
+    experiment_ids = get_experiment_ids()
 
     # Construct response
     response = {
@@ -145,32 +144,6 @@ def _classes(experiment_id="latest"):
     """Classes in an experiment."""
     # Get classes
     results = get_classes(experiment_id=experiment_id)
-
-    # Construct response
-    response = {
-        "message": results["message"],
-        "method": request.method,
-        "status-code": results["status-code"],
-        "timestamp": datetime.now().isoformat(),
-        "url": request.url,
-    }
-
-    # Add data
-    if results["status-code"] == HTTPStatus.OK:
-        response["data"] = results["data"]
-
-    # Log
-    ml_logger.info(json.dumps(response, indent=4, sort_keys=True))
-    return make_response(jsonify(response), response["status-code"])
-
-
-# Performance
-@_api.route("/document-classification/performance", methods=["GET"])
-@_api.route("/document-classification/performance/<experiment_id>", methods=["GET"])
-def _performance(experiment_id="latest"):
-    """Test performance metrics across all classes."""
-    # Get performance
-    results = get_performance(experiment_id=experiment_id)
 
     # Construct response
     response = {
