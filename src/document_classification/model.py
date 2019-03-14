@@ -7,10 +7,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from document_classification.utils import compute_accuracy
+from document_classification.utils import compute_accuracy, model_summary
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
+
 
 class DocumentClassificationModel(nn.Module):
     def __init__(self, embedding_dim, num_embeddings, num_channels,
@@ -65,6 +66,25 @@ class DocumentClassificationModel(nn.Module):
 
         return y_pred
 
+
+class Model(object):
+    def __init__(self, config, vectorizer, tensorboard=None):
+        """Initialize the model."""
+        self._model = DocumentClassificationModel(
+            embedding_dim=config["embedding_dim"],
+            num_embeddings=len(vectorizer.X_vocab),
+            num_channels=config["cnn"]["num_filters"],
+            hidden_dim=config["fc"]["hidden_dim"],
+            num_classes=len(vectorizer.y_vocab),
+            dropout_p=config["fc"]["dropout_p"],
+            padding_idx=vectorizer.X_vocab.mask_index)
+        self.vectorizer = vectorizer
+        self.tensorboard = tensorboard
+
+        # Model summary
+        inputs = torch.zeros((1, 18), dtype=torch.long)
+        model_summary(self._model, inputs)
+
     def compile(self, learning_rate, optimizer, scheduler,
                 loss_func, collate_fn, device):
         self.learning_rate = learning_rate
@@ -75,15 +95,9 @@ class DocumentClassificationModel(nn.Module):
         self.device = device
 
     def forward_pass(self, inputs, outputs):
-        # Compute the output
-        y_pred = self(inputs)
-
-        # Compute the loss
+        y_pred = self._model(inputs)
         loss = self.loss_func(y_pred, outputs)
-
-        # compute the accuracy
         accuracy = compute_accuracy(y_pred, outputs)
-
         return y_pred, loss, accuracy
 
     def fit(self, train_dataset, val_dataset, num_epochs, batch_size):
@@ -102,7 +116,7 @@ class DocumentClassificationModel(nn.Module):
                 batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
             running_loss = 0.0
             running_accuracy = 0.0
-            self.train()
+            self._model.train()
 
             for batch_index, batch_dict in enumerate(train_generator):
 
@@ -132,7 +146,7 @@ class DocumentClassificationModel(nn.Module):
                 batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
             running_loss = 0.0
             running_accuracy = 0.0
-            self.eval()
+            self._model.eval()
 
             for batch_index, batch_dict in enumerate(val_generator):
 
@@ -154,6 +168,10 @@ class DocumentClassificationModel(nn.Module):
                 self.history["train_loss"][-1], self.history["train_accuracy"][-1],
                 self.history["val_loss"][-1], self.history["val_accuracy"][-1]))
 
+            # Log to tensorboard
+            if self.tensorboard:
+                self.tensorboard.log(model=self._model, history=self.history, step=epoch_index)
+
         return self.history
 
     def evaluate(self, dataset):
@@ -161,7 +179,7 @@ class DocumentClassificationModel(nn.Module):
             batch_size=min(128, len(dataset)), collate_fn=self.collate_fn, device=self.device)
         running_loss = 0.0
         running_accuracy = 0.0
-        self.eval()
+        self._model.eval()
 
         true = []
         pred = []
@@ -198,11 +216,14 @@ class DocumentClassificationModel(nn.Module):
 
         return running_loss, running_accuracy, performance
 
-    def predict(self, X, classes):
+    def predict(self, X):
+        self._model.eval()
+        self._model = self._model.to("cpu")
+
         # Forward pass
-        self.eval()
         X = torch.LongTensor(X).unsqueeze(0)
-        y_pred = self(X, apply_softmax=True)
+        y_pred = self._model(X, apply_softmax=True)
+        classes = self.vectorizer.y_vocab
 
         # Top k nationalities
         y_prob, indices = torch.topk(y_pred, k=len(classes))
@@ -217,7 +238,10 @@ class DocumentClassificationModel(nn.Module):
         return prediction
 
     def save(self, model_filepath):
-        torch.save(self.state_dict(), model_filepath)
+        torch.save(self._model.state_dict(), model_filepath)
+
+    def load(self, model_filepath):
+        self._model.load_state_dict(torch.load(model_filepath), strict=False)
 
 
 
