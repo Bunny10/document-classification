@@ -39,16 +39,16 @@ curl --request POST \
      --url http://localhost:5000/document-classification/predict/latest \
      --header "Content-Type: application/json" \
      --data '{
-        "X": "Global warming is an increasing threat and scientists are working to find a solution."
+        "X": "Global warming is inevitables, scientists warn."
         }'
 ```
 - Python package
 ```python
 from api.utils import predict
-X = "Global warming is an increasing threat and scientists are working to find a solution."
-predictions = predict(experiment_id="latest", X=X)["data"]["predictions"]
+X = "Global warming is inevitables, scientists warn."
+prediction = predict(experiment_id="latest", X=X)["data"]["prediction"]
 
->>> print (predictions)
+>>> print (prediction)
 [{'y': 'Sci/Tech', 'probability': 0.6540133357048035}, {'y': 'Business', 'probability': 0.339420884847641}, {'y': 'World', 'probability': 0.003702996065840125}, {'y': 'Sports', 'probability': 0.002862769179046154}]
 ```
 
@@ -114,13 +114,8 @@ src/
 |   ├── logging.json            - logger configuration
 |   └── training.json           - training configuration
 ├── document_classification/  - ML files
-|   ├── dataset.py              - dataset/dataloader
-|   ├── inference.py            - inference operations
-|   ├── load.py                 - load the data
-|   ├── model.py                - model architecture
-|   ├── preprocess.py           - preprocess the data
-|   ├── split.py                - split the data
-|   ├── training.py             - train the model
+|   ├── dataset.py              - dataset
+|   ├── model.py                - model functions
 |   ├── utils.py                - utility functions
 |   ├── vectorizer.py           - vectorize the processed data
 |   └── vocabulary.py           - vocabulary to vectorize data

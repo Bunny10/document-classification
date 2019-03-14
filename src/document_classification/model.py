@@ -199,6 +199,8 @@ class DocumentClassificationModel(nn.Module):
         return running_loss, running_accuracy, performance
 
     def predict(self, X, classes):
+        # Forward pass
+        self.eval()
         X = torch.LongTensor(X).unsqueeze(0)
         y_pred = self(X, apply_softmax=True)
 
