@@ -270,7 +270,7 @@ class BatchLogger(object):
 
     def log(self, batch_index, lr, train_loss, train_acc, val_loss=0, val_acc=0, start=None):
         sys.stdout.write("\r")
-        sys.stdout.write("{0}/{1} [{2:<{3}}] - {4}s - lr: {5:.2E} - loss: {6:.3f} - acc: {7:.1f}% - val_loss: {8:.3f} - val_acc: {9:.1f}%".format(
+        sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - loss: {6:.3f} - acc: {7:.1f}% - val_loss: {8:.3f} - val_acc: {9:.1f}%".format(
             min((batch_index+1)*self.batch_size, self.num_samples),
             self.num_samples,
             "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),

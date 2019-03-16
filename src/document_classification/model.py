@@ -78,22 +78,21 @@ class Model(object):
             hidden_dim=config["fc"]["hidden_dim"],
             num_classes=len(vectorizer.y_vocab),
             dropout_p=config["fc"]["dropout_p"],
-            padding_idx=vectorizer.X_vocab.mask_index)
+            padding_idx=vectorizer.X_vocab.mask_index).to(config["device"])
         self.vectorizer = vectorizer
+        self.device = config["device"]
         self.tensorboard = tensorboard
 
         # Model summary
         inputs = torch.zeros((1, 18), dtype=torch.long)
         model_summary(self._model, inputs)
 
-    def compile(self, learning_rate, optimizer, scheduler,
-                loss_func, collate_fn, device):
+    def compile(self, learning_rate, optimizer, scheduler, loss_func, collate_fn):
         self.learning_rate = learning_rate
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.loss_func = loss_func
         self.collate_fn = collate_fn
-        self.device = device
 
     def forward_pass(self, inputs, outputs):
         y_pred = self._model(inputs)
@@ -118,14 +117,14 @@ class Model(object):
             print ("\nEpoch {0}/{1}".format(epoch_index+1, num_epochs,))
 
             # Training
-            train_generator = train_dataset.generate_batches(
+            train_loader = train_dataset.generate_batches(
                 batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
             start = time.time()
             running_train_loss = 0.0
             running_train_accuracy = 0.0
             self._model.train()
 
-            for train_batch_index, batch_dict in enumerate(train_generator):
+            for train_batch_index, batch_dict in enumerate(train_loader):
 
                 # Zero the gradients
                 self.optimizer.zero_grad()
@@ -158,13 +157,13 @@ class Model(object):
             self.history["train_accuracy"].append(running_train_accuracy)
 
             # Validation
-            val_generator = val_dataset.generate_batches(
+            val_loader = val_dataset.generate_batches(
                 batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
             running_val_loss = 0.0
             running_val_accuracy = 0.0
             self._model.eval()
 
-            for val_batch_index, batch_dict in enumerate(val_generator):
+            for val_batch_index, batch_dict in enumerate(val_loader):
 
                 # Forward pass
                 _, loss, accuracy = self.forward_pass(
@@ -196,7 +195,7 @@ class Model(object):
         return self.history
 
     def evaluate(self, dataset):
-        generator = dataset.generate_batches(
+        loader = dataset.generate_batches(
             batch_size=min(128, len(dataset)), collate_fn=self.collate_fn, device=self.device)
         running_loss = 0.0
         running_accuracy = 0.0
@@ -204,7 +203,7 @@ class Model(object):
 
         true = []
         pred = []
-        for batch_index, batch_dict in enumerate(generator):
+        for batch_index, batch_dict in enumerate(loader):
 
             # Forward pass
             y_pred, loss, accuracy = self.forward_pass(

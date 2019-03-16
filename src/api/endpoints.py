@@ -5,8 +5,10 @@ from http import HTTPStatus
 import json
 import logging
 
+from config import CONFIGS_DIR
 from api.utils import train, predict, get_classes, get_experiment_ids, \
                       experiment_info, delete_experiment
+from document_classification.utils import load_json
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
@@ -40,7 +42,9 @@ def _train():
     config_file = request.json["config_file"]
 
     # Training
-    results = train(config_file=config_file)
+    config_filepath = os.path.join(CONFIGS_DIR, config_file)
+    config = load_json(filepath=config_filepath)
+    results = train(config=config)
 
     # Construct response
     response = {

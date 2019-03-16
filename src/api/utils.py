@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import uuid
 
-from config import CONFIGS_DIR, DATA_DIR, EXPERIMENTS_DIR, TENSORBOARD_DIR
+from config import DATA_DIR, EXPERIMENTS_DIR, TENSORBOARD_DIR
 from document_classification.dataset import Dataset
 from document_classification.model import Model
 from document_classification.utils import class_weights, clean_text, \
@@ -26,10 +26,10 @@ from document_classification.vectorizer import Vectorizer
 # Logger
 ml_logger = logging.getLogger("ml_logger")
 
-def train(config_file):
+def train(config):
     """Asynchronously train a model."""
     # Get config
-    config = set_up(config_file)
+    config = set_up(config)
 
     # Save config
     config_fp = os.path.join(config["experiment_dir"], "config.json")
@@ -53,11 +53,7 @@ def train(config_file):
     return results
 
 
-def set_up(config_file):
-    # Load config
-    config_filepath = os.path.join(CONFIGS_DIR, config_file)
-    config = load_json(filepath=config_filepath)
-
+def set_up(config):
     # Set seeds
     set_seeds(seed=config["seed"], cuda=config["cuda"])
 
@@ -101,7 +97,7 @@ def training_operations(config):
 
     # Vectorizer
     vectorizer = Vectorizer()
-    vectorizer.fit(df=train_df, cutoff=0)
+    vectorizer.fit(df=train_df, cutoff=config["cutoff"])
 
     # Datasets
     train_dataset = Dataset(df=train_df, vectorizer=vectorizer)
@@ -122,15 +118,14 @@ def training_operations(config):
                   optimizer=optimizer,
                   scheduler=scheduler,
                   loss_func=loss_func,
-                  collate_fn=collate_fn,
-                  device=config["device"])
+                  collate_fn=collate_fn)
 
     # Train
     history = model.fit(train_dataset=train_dataset,
                         val_dataset=val_dataset,
                         num_epochs=config["num_epochs"],
                         batch_size=config["batch_size"],
-                        verbose=True)
+                        verbose=config["verbose"])
 
     # Evaluate
     history["test_loss"], history["test_accuracy"], history["performance"] = \
@@ -158,6 +153,7 @@ def predict(experiment_id, X):
     # Inference operations
     config_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "config.json")
     config = load_json(config_filepath)
+    config["device"] = torch.device("cpu")
 
     # Load vectorizer
     vectorizer = Vectorizer()

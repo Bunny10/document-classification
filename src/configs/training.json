@@ -2,6 +2,7 @@
   "seed": 1234,
   "cuda": false,
   "shuffle": true,
+  "verbose": true,
   "train_size": 0.7,
   "val_size": 0.15,
   "test_size": 0.15,
@@ -9,11 +10,11 @@
   "vectorizer_file": "vectorizer.json",
   "model_file": "model.pth",
   "history_file": "history.json",
+  "cutoff": 0,
   "num_epochs": 10,
-  "early_stopping_criteria": 5,
   "learning_rate": 1e-3,
   "batch_size": 128,
-  "embedding_dim": 100,
+  "embedding_dim": 256,
   "cnn": {
     "num_filters": 50
   },
