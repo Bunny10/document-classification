@@ -1,8 +1,6 @@
 from setuptools import setup, find_packages, dist
 
-requirements = [package for package,version in
-                  [line.split ("==") for line in
-                   open("requirements.txt").read().split("\n") if line]]
+requirements = [package for package in open("requirements.txt").read().split("\n") if package]
 
 setup(
     name="document_classification",
@@ -12,7 +10,7 @@ setup(
     author="Goku Mohandas",
     author_email="gokumd@gmail.com",
     packages=find_packages(),
-    setup_requires=['Flask==1.0.2'],
+    setup_requires=["Flask==1.0.2"],
     install_requires=requirements,
     python_requires=">=3.6",
     test_suite="tests",
