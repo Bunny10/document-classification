@@ -71,6 +71,7 @@ def set_up(config_file):
     config["vectorizer_filepath"] = os.path.join(config["experiment_dir"], config["vectorizer_file"])
     config["model_filepath"] = os.path.join(config["experiment_dir"], config["model_file"])
     config["tensorboard_dir"] = os.path.join(TENSORBOARD_DIR, config["experiment_id"])
+    config["history_filepath"] = os.path.join(config["experiment_dir"], config["history_file"])
 
     # Check CUDA
     if not torch.cuda.is_available():
@@ -128,7 +129,8 @@ def training_operations(config):
     history = model.fit(train_dataset=train_dataset,
                         val_dataset=val_dataset,
                         num_epochs=config["num_epochs"],
-                        batch_size=config["batch_size"])
+                        batch_size=config["batch_size"],
+                        verbose=True)
 
     # Evaluate
     history["test_loss"], history["test_accuracy"], history["performance"] = \
@@ -139,7 +141,7 @@ def training_operations(config):
     vectorizer.save(config["vectorizer_filepath"])
 
     # Save history
-    with open(os.path.join(config["experiment_dir"], "history.json"), "w") as fp:
+    with open(config["history_filepath"], "w") as fp:
         json.dump(history, fp)
     ml_logger.info("==> History:\n{0}".format(
         json.dumps(history, indent=4, sort_keys=True)))

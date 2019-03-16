@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import math
 import numpy as np
 import pandas as pd
 import random
@@ -31,11 +32,12 @@ class Dataset(Dataset):
         return {"X": X, "y": y}
 
     def get_num_batches(self, batch_size):
-        return len(self) // batch_size
+        return math.ceil(len(self) / batch_size)
 
     def generate_batches(self, batch_size, collate_fn, device):
         dataloader = DataLoader(dataset=self, batch_size=batch_size,
-                                shuffle=True, collate_fn=collate_fn)
+                                shuffle=True, collate_fn=collate_fn,
+                                drop_last=False)
         for data_dict in dataloader:
             out_data_dict = {}
             for name, tensor in data_dict.items():

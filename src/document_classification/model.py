@@ -3,11 +3,12 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.metrics import precision_recall_fscore_support
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from document_classification.utils import compute_accuracy, model_summary
+from document_classification.utils import BatchLogger, compute_accuracy, model_summary
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
@@ -100,7 +101,7 @@ class Model(object):
         accuracy = compute_accuracy(y_pred, outputs)
         return y_pred, loss, accuracy
 
-    def fit(self, train_dataset, val_dataset, num_epochs, batch_size):
+    def fit(self, train_dataset, val_dataset, num_epochs, batch_size, verbose=True):
         self.history = {
             "learning_rate": self.learning_rate,
             "train_loss": [],
@@ -108,17 +109,23 @@ class Model(object):
             "val_loss": [],
             "val_accuracy": []
         }
+        self.batch_logger = BatchLogger(train_dataset=train_dataset,
+                                        val_dataset=val_dataset,
+                                        batch_size=batch_size)
 
         for epoch_index in range(num_epochs):
+
+            print ("\nEpoch {0}/{1}".format(epoch_index+1, num_epochs,))
 
             # Training
             train_generator = train_dataset.generate_batches(
                 batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
-            running_loss = 0.0
-            running_accuracy = 0.0
+            start = time.time()
+            running_train_loss = 0.0
+            running_train_accuracy = 0.0
             self._model.train()
 
-            for batch_index, batch_dict in enumerate(train_generator):
+            for train_batch_index, batch_dict in enumerate(train_generator):
 
                 # Zero the gradients
                 self.optimizer.zero_grad()
@@ -134,39 +141,53 @@ class Model(object):
                 self.optimizer.step()
 
                 # Update metrics
-                running_loss += (loss.to("cpu").item() - running_loss) / (batch_index + 1)
-                running_accuracy += (accuracy - running_accuracy) / (batch_index + 1)
+                running_train_loss += (loss.to("cpu").item() - running_train_loss) / (train_batch_index + 1)
+                running_train_accuracy += (accuracy - running_train_accuracy) / (train_batch_index + 1)
+
+                # Log batch
+                if verbose:
+                    self.batch_logger.log(batch_index=train_batch_index,
+                                          lr=self.history["learning_rate"],
+                                          train_loss=running_train_loss,
+                                          train_acc=running_train_accuracy,
+                                          start=start)
+                    start = time.time()
 
 
-            self.history["train_loss"].append(running_loss)
-            self.history["train_accuracy"].append(running_accuracy)
+            self.history["train_loss"].append(running_train_loss)
+            self.history["train_accuracy"].append(running_train_accuracy)
 
             # Validation
             val_generator = val_dataset.generate_batches(
                 batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
-            running_loss = 0.0
-            running_accuracy = 0.0
+            running_val_loss = 0.0
+            running_val_accuracy = 0.0
             self._model.eval()
 
-            for batch_index, batch_dict in enumerate(val_generator):
+            for val_batch_index, batch_dict in enumerate(val_generator):
 
                 # Forward pass
                 _, loss, accuracy = self.forward_pass(
                     inputs=batch_dict["X"], outputs=batch_dict["y"])
 
                 # Update metrics
-                running_loss += (loss.to("cpu").item() - running_loss) / (batch_index + 1)
-                running_accuracy += (accuracy - running_accuracy) / (batch_index + 1)
+                running_val_loss += (loss.to("cpu").item() - running_val_loss) / (val_batch_index + 1)
+                running_val_accuracy += (accuracy - running_val_accuracy) / (val_batch_index + 1)
 
-            self.history["val_loss"].append(running_loss)
-            self.history["val_accuracy"].append(running_accuracy)
+                # Log batch
+                if verbose:
+                    self.batch_logger.log(batch_index=train_batch_index+val_batch_index+1,
+                                          lr=self.history["learning_rate"],
+                                          train_loss=running_train_loss,
+                                          train_acc=running_train_accuracy,
+                                          val_loss=running_val_loss,
+                                          val_acc=running_val_accuracy,
+                                          start=start)
+                    start = time.time()
+
+            self.history["val_loss"].append(running_val_loss)
+            self.history["val_accuracy"].append(running_val_accuracy)
             self.scheduler.step(self.history["val_loss"][-1])
-
-            # Verbose
-            ml_logger.info("Epoch: {0}/{1} | lr: {2:.2E} | train_loss: {3:.3f} | train_accuracy: {4:.1f}% | val_loss: {5:.3f} | val_accuracy: {6:.1f}%".format(
-                epoch_index+1, num_epochs, self.history["learning_rate"],
-                self.history["train_loss"][-1], self.history["train_accuracy"][-1],
-                self.history["val_loss"][-1], self.history["val_accuracy"][-1]))
 
             # Log to tensorboard
             if self.tensorboard:
@@ -196,7 +217,7 @@ class Model(object):
             # Store
             y_prob, indices = y_pred.max(dim=1)
             indices_list = indices.cpu().numpy().tolist()
-            true.extend(batch_dict['y'].cpu())
+            true.extend(batch_dict["y"].cpu())
             pred.extend(indices_list)
 
         # Metrics

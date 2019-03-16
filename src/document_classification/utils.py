@@ -1,4 +1,5 @@
 import os
+import sys
 import collections
 import copy
 import json
@@ -7,6 +8,7 @@ import numpy as np
 import pandas as pd
 import re
 import tensorflow as tf
+import time
 import torch
 
 # Logger
@@ -257,6 +259,25 @@ def model_summary(model, x, *args, **kwargs):
     print ("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
     print ("-"*100)
 
+class BatchLogger(object):
+    def __init__(self, train_dataset, val_dataset, batch_size):
+        num_train_batches = train_dataset.get_num_batches(batch_size)
+        num_val_batches = val_dataset.get_num_batches(batch_size)
+        self.num_samples = len(train_dataset) + len(val_dataset)
+        self.num_batches = num_train_batches + num_val_batches
+        self.batch_size = batch_size
+        self.progress_bar_length = 12
+
+    def log(self, batch_index, lr, train_loss, train_acc, val_loss=0, val_acc=0, start=None):
+        sys.stdout.write("\r")
+        sys.stdout.write("{0}/{1} [{2:<{3}}] - {4}s - lr: {5:.2E} - loss: {6:.3f} - acc: {7:.1f}% - val_loss: {8:.3f} - val_acc: {9:.1f}%".format(
+            min((batch_index+1)*self.batch_size, self.num_samples),
+            self.num_samples,
+            "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),
+            self.progress_bar_length,
+            int((time.time()-start)*(self.num_batches - (batch_index+1))),
+            lr, train_loss, train_acc, val_loss, val_acc))
+        sys.stdout.flush()
 
 # Credit: https://github.com/yunjey/pytorch-tutorial
 class TensorboardLogger(object):
