@@ -1,4 +1,5 @@
 import os
+import sys
 import collections
 import copy
 import json
@@ -7,6 +8,7 @@ import numpy as np
 import pandas as pd
 import re
 import tensorflow as tf
+import time
 import torch
 
 # Logger
@@ -146,46 +148,6 @@ def compute_accuracy(y_pred, y_target):
     return n_correct / len(y_pred_indices) * 100
 
 
-# Credit: https://github.com/yunjey/pytorch-tutorial
-class TensorboardLogger(object):
-    def __init__(self, log_dir):
-        """Create a summary writer logging to log_dir."""
-        self.writer = tf.summary.FileWriter(log_dir)
-
-    def scalar_summary(self, tag, value, step):
-        """Log a scalar variable."""
-        summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=value)])
-        self.writer.add_summary(summary, step)
-
-    def histo_summary(self, tag, values, step, bins=1000):
-        """Log a histogram of the tensor of values."""
-
-        # Create a histogram using numpy
-        counts, bin_edges = np.histogram(values, bins=bins)
-
-        # Fill the fields of the histogram proto
-        hist = tf.HistogramProto()
-        hist.min = float(np.min(values))
-        hist.max = float(np.max(values))
-        hist.num = int(np.prod(values.shape))
-        hist.sum = float(np.sum(values))
-        hist.sum_squares = float(np.sum(values**2))
-
-        # Drop the start of the first bin
-        bin_edges = bin_edges[1:]
-
-        # Add bin edges and counts
-        for edge in bin_edges:
-            hist.bucket_limit.append(edge)
-        for c in counts:
-            hist.bucket.append(c)
-
-        # Create and write Summary
-        summary = tf.Summary(value=[tf.Summary.Value(tag=tag, histo=hist)])
-        self.writer.add_summary(summary, step)
-        self.writer.flush()
-
-
 # Extended from https://github.com/nmhkahn/torchsummaryX
 def model_summary(model, x, *args, **kwargs):
     def register_hook(module):
@@ -296,3 +258,81 @@ def model_summary(model, x, *args, **kwargs):
     print ("Embedding:     [num_tokens, embedding_dim]")
     print ("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
     print ("-"*100)
+
+class BatchLogger(object):
+    def __init__(self, train_dataset, val_dataset, batch_size):
+        num_train_batches = train_dataset.get_num_batches(batch_size)
+        num_val_batches = val_dataset.get_num_batches(batch_size)
+        self.num_samples = len(train_dataset) + len(val_dataset)
+        self.num_batches = num_train_batches + num_val_batches
+        self.batch_size = batch_size
+        self.progress_bar_length = 12
+
+    def log(self, batch_index, lr, train_loss, train_acc, val_loss=0, val_acc=0, start=None):
+        sys.stdout.write("\r")
+        sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - loss: {6:.3f} - acc: {7:.1f}% - val_loss: {8:.3f} - val_acc: {9:.1f}%".format(
+            min((batch_index+1)*self.batch_size, self.num_samples),
+            self.num_samples,
+            "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),
+            self.progress_bar_length,
+            int((time.time()-start)*(self.num_batches - (batch_index+1))),
+            lr, train_loss, train_acc, val_loss, val_acc))
+        sys.stdout.flush()
+
+# Credit: https://github.com/yunjey/pytorch-tutorial
+class TensorboardLogger(object):
+    def __init__(self, log_dir):
+        """Create a summary writer logging to log_dir."""
+        self.writer = tf.summary.FileWriter(log_dir)
+
+    def scalar_summary(self, tag, value, step):
+        """Log a scalar variable."""
+        summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=value)])
+        self.writer.add_summary(summary, step)
+
+    def histo_summary(self, tag, values, step, bins=1000):
+        """Log a histogram of the tensor of values."""
+
+        # Create a histogram using numpy
+        counts, bin_edges = np.histogram(values, bins=bins)
+
+        # Fill the fields of the histogram proto
+        hist = tf.HistogramProto()
+        hist.min = float(np.min(values))
+        hist.max = float(np.max(values))
+        hist.num = int(np.prod(values.shape))
+        hist.sum = float(np.sum(values))
+        hist.sum_squares = float(np.sum(values**2))
+
+        # Drop the start of the first bin
+        bin_edges = bin_edges[1:]
+
+        # Add bin edges and counts
+        for edge in bin_edges:
+            hist.bucket_limit.append(edge)
+        for c in counts:
+            hist.bucket.append(c)
+
+        # Create and write Summary
+        summary = tf.Summary(value=[tf.Summary.Value(tag=tag, histo=hist)])
+        self.writer.add_summary(summary, step)
+        self.writer.flush()
+
+    def log(self, model, history, step):
+        # Tensorboard log scalar metrics
+        self.scalar_summary("lr", history["learning_rate"], step)
+        for metric in ["train_loss", "val_loss"]:
+            value = history[metric][-1]
+            self.scalar_summary("loss/{0}".format(metric), value, step)
+        for metric in ["train_accuracy", "val_accuracy"]:
+            value = history[metric][-1]
+            self.scalar_summary("accuracy/{0}".format(metric), value, step)
+
+        # Tensorboard log historgram weights
+        for param, value in model.named_parameters():
+            param = param.replace(".", "/")
+            self.histo_summary(param, value.data.cpu().numpy(), step)
+            try:
+                self.histo_summary(param+"/grad", value.grad.data.cpu().numpy(), step)
+            except AttributeError as e:
+                continue

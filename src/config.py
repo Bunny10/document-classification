@@ -8,9 +8,11 @@ DATA_DIR = os.path.join(BASE_DIR, "datasets")
 CONFIGS_DIR = os.path.join(BASE_DIR, "configs")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 EXPERIMENTS_DIR = os.path.join(BASE_DIR, "experiments")
+TENSORBOARD_DIR = os.path.join(BASE_DIR, "tensorboard")
 
 # Loggers
 if not os.path.exists(LOGS_DIR): os.makedirs(LOGS_DIR)
+if not os.path.exists(TENSORBOARD_DIR): os.makedirs(TENSORBOARD_DIR)
 log_filepath = os.path.join(CONFIGS_DIR, "logging.json")
 with open(log_filepath, "r") as fp: log_config = json.load(fp)
 logging.config.dictConfig(log_config)

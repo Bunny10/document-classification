@@ -3,14 +3,16 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.metrics import precision_recall_fscore_support
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from document_classification.utils import compute_accuracy
+from document_classification.utils import BatchLogger, compute_accuracy, model_summary
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
+
 
 class DocumentClassificationModel(nn.Module):
     def __init__(self, embedding_dim, num_embeddings, num_channels,
@@ -65,28 +67,40 @@ class DocumentClassificationModel(nn.Module):
 
         return y_pred
 
-    def compile(self, learning_rate, optimizer, scheduler,
-                loss_func, collate_fn, device):
+
+class Model(object):
+    def __init__(self, config, vectorizer, tensorboard=None):
+        """Initialize the model."""
+        self._model = DocumentClassificationModel(
+            embedding_dim=config["embedding_dim"],
+            num_embeddings=len(vectorizer.X_vocab),
+            num_channels=config["cnn"]["num_filters"],
+            hidden_dim=config["fc"]["hidden_dim"],
+            num_classes=len(vectorizer.y_vocab),
+            dropout_p=config["fc"]["dropout_p"],
+            padding_idx=vectorizer.X_vocab.mask_index).to(config["device"])
+        self.vectorizer = vectorizer
+        self.device = config["device"]
+        self.tensorboard = tensorboard
+
+        # Model summary
+        inputs = torch.zeros((1, 18), dtype=torch.long)
+        model_summary(self._model, inputs)
+
+    def compile(self, learning_rate, optimizer, scheduler, loss_func, collate_fn):
         self.learning_rate = learning_rate
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.loss_func = loss_func
         self.collate_fn = collate_fn
-        self.device = device
 
     def forward_pass(self, inputs, outputs):
-        # Compute the output
-        y_pred = self(inputs)
-
-        # Compute the loss
+        y_pred = self._model(inputs)
         loss = self.loss_func(y_pred, outputs)
-
-        # compute the accuracy
         accuracy = compute_accuracy(y_pred, outputs)
-
         return y_pred, loss, accuracy
 
-    def fit(self, train_dataset, val_dataset, num_epochs, batch_size):
+    def fit(self, train_dataset, val_dataset, num_epochs, batch_size, verbose=True):
         self.history = {
             "learning_rate": self.learning_rate,
             "train_loss": [],
@@ -94,17 +108,23 @@ class DocumentClassificationModel(nn.Module):
             "val_loss": [],
             "val_accuracy": []
         }
+        self.batch_logger = BatchLogger(train_dataset=train_dataset,
+                                        val_dataset=val_dataset,
+                                        batch_size=batch_size)
 
         for epoch_index in range(num_epochs):
 
-            # Training
-            train_generator = train_dataset.generate_batches(
-                batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
-            running_loss = 0.0
-            running_accuracy = 0.0
-            self.train()
+            print ("\nEpoch {0}/{1}".format(epoch_index+1, num_epochs,))
 
-            for batch_index, batch_dict in enumerate(train_generator):
+            # Training
+            train_loader = train_dataset.generate_batches(
+                batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
+            start = time.time()
+            running_train_loss = 0.0
+            running_train_accuracy = 0.0
+            self._model.train()
+
+            for train_batch_index, batch_dict in enumerate(train_loader):
 
                 # Zero the gradients
                 self.optimizer.zero_grad()
@@ -120,52 +140,70 @@ class DocumentClassificationModel(nn.Module):
                 self.optimizer.step()
 
                 # Update metrics
-                running_loss += (loss.to("cpu").item() - running_loss) / (batch_index + 1)
-                running_accuracy += (accuracy - running_accuracy) / (batch_index + 1)
+                running_train_loss += (loss.to("cpu").item() - running_train_loss) / (train_batch_index + 1)
+                running_train_accuracy += (accuracy - running_train_accuracy) / (train_batch_index + 1)
+
+                # Log batch
+                if verbose:
+                    self.batch_logger.log(batch_index=train_batch_index,
+                                          lr=self.history["learning_rate"],
+                                          train_loss=running_train_loss,
+                                          train_acc=running_train_accuracy,
+                                          start=start)
+                    start = time.time()
 
 
-            self.history["train_loss"].append(running_loss)
-            self.history["train_accuracy"].append(running_accuracy)
+            self.history["train_loss"].append(running_train_loss)
+            self.history["train_accuracy"].append(running_train_accuracy)
 
             # Validation
-            val_generator = val_dataset.generate_batches(
+            val_loader = val_dataset.generate_batches(
                 batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
-            running_loss = 0.0
-            running_accuracy = 0.0
-            self.eval()
+            running_val_loss = 0.0
+            running_val_accuracy = 0.0
+            self._model.eval()
 
-            for batch_index, batch_dict in enumerate(val_generator):
+            for val_batch_index, batch_dict in enumerate(val_loader):
 
                 # Forward pass
                 _, loss, accuracy = self.forward_pass(
                     inputs=batch_dict["X"], outputs=batch_dict["y"])
 
                 # Update metrics
-                running_loss += (loss.to("cpu").item() - running_loss) / (batch_index + 1)
-                running_accuracy += (accuracy - running_accuracy) / (batch_index + 1)
+                running_val_loss += (loss.to("cpu").item() - running_val_loss) / (val_batch_index + 1)
+                running_val_accuracy += (accuracy - running_val_accuracy) / (val_batch_index + 1)
 
-            self.history["val_loss"].append(running_loss)
-            self.history["val_accuracy"].append(running_accuracy)
+                # Log batch
+                if verbose:
+                    self.batch_logger.log(batch_index=train_batch_index+val_batch_index+1,
+                                          lr=self.history["learning_rate"],
+                                          train_loss=running_train_loss,
+                                          train_acc=running_train_accuracy,
+                                          val_loss=running_val_loss,
+                                          val_acc=running_val_accuracy,
+                                          start=start)
+                    start = time.time()
+
+            self.history["val_loss"].append(running_val_loss)
+            self.history["val_accuracy"].append(running_val_accuracy)
             self.scheduler.step(self.history["val_loss"][-1])
 
-            # Verbose
-            ml_logger.info("Epoch: {0}/{1} | lr: {2:.2E} | train_loss: {3:.3f} | train_accuracy: {4:.1f}% | val_loss: {5:.3f} | val_accuracy: {6:.1f}%".format(
-                epoch_index+1, num_epochs, self.history["learning_rate"],
-                self.history["train_loss"][-1], self.history["train_accuracy"][-1],
-                self.history["val_loss"][-1], self.history["val_accuracy"][-1]))
+            # Log to tensorboard
+            if self.tensorboard:
+                self.tensorboard.log(model=self._model, history=self.history, step=epoch_index)
 
         return self.history
 
     def evaluate(self, dataset):
-        generator = dataset.generate_batches(
+        loader = dataset.generate_batches(
             batch_size=min(128, len(dataset)), collate_fn=self.collate_fn, device=self.device)
         running_loss = 0.0
         running_accuracy = 0.0
-        self.eval()
+        self._model.eval()
 
         true = []
         pred = []
-        for batch_index, batch_dict in enumerate(generator):
+        for batch_index, batch_dict in enumerate(loader):
 
             # Forward pass
             y_pred, loss, accuracy = self.forward_pass(
@@ -178,7 +216,7 @@ class DocumentClassificationModel(nn.Module):
             # Store
             y_prob, indices = y_pred.max(dim=1)
             indices_list = indices.cpu().numpy().tolist()
-            true.extend(batch_dict['y'].cpu())
+            true.extend(batch_dict["y"].cpu())
             pred.extend(indices_list)
 
         # Metrics
@@ -198,11 +236,14 @@ class DocumentClassificationModel(nn.Module):
 
         return running_loss, running_accuracy, performance
 
-    def predict(self, X, classes):
+    def predict(self, X):
+        self._model.eval()
+        self._model = self._model.to("cpu")
+
         # Forward pass
-        self.eval()
         X = torch.LongTensor(X).unsqueeze(0)
-        y_pred = self(X, apply_softmax=True)
+        y_pred = self._model(X, apply_softmax=True)
+        classes = self.vectorizer.y_vocab
 
         # Top k nationalities
         y_prob, indices = torch.topk(y_pred, k=len(classes))
@@ -217,7 +258,10 @@ class DocumentClassificationModel(nn.Module):
         return prediction
 
     def save(self, model_filepath):
-        torch.save(self.state_dict(), model_filepath)
+        torch.save(self._model.state_dict(), model_filepath)
+
+    def load(self, model_filepath):
+        self._model.load_state_dict(torch.load(model_filepath), strict=False)
 
 
 

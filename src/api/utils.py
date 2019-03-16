@@ -14,22 +14,22 @@ import torch.nn.functional as F
 import torch.optim as optim
 import uuid
 
-from config import CONFIGS_DIR, DATA_DIR, EXPERIMENTS_DIR
+from config import DATA_DIR, EXPERIMENTS_DIR, TENSORBOARD_DIR
 from document_classification.dataset import Dataset
-from document_classification.model import DocumentClassificationModel
+from document_classification.model import Model
 from document_classification.utils import class_weights, clean_text, \
                                           collate_fn, load_json, \
-                                          model_summary, set_seeds, \
+                                          set_seeds, TensorboardLogger, \
                                           train_val_test_split
 from document_classification.vectorizer import Vectorizer
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
 
-def train(config_file):
+def train(config):
     """Asynchronously train a model."""
     # Get config
-    config = set_up(config_file)
+    config = set_up(config)
 
     # Save config
     config_fp = os.path.join(config["experiment_dir"], "config.json")
@@ -53,25 +53,21 @@ def train(config_file):
     return results
 
 
-def set_up(config_file):
-    # Load config
-    config_filepath = os.path.join(CONFIGS_DIR, config_file)
-    config = load_json(filepath=config_filepath)
-
+def set_up(config):
     # Set seeds
     set_seeds(seed=config["seed"], cuda=config["cuda"])
 
-    # Generate unique experiment ID
+    # Create experiment dir
     config["experiment_id"] = generate_unique_id()
-
-    # Define paths
-    config["data_filepath"] = os.path.join(DATA_DIR, config["data_file"])
     config["experiment_dir"] = os.path.join(EXPERIMENTS_DIR, config["experiment_id"])
     os.makedirs(config["experiment_dir"])
 
     # Expand file paths
+    config["data_filepath"] = os.path.join(DATA_DIR, config["data_file"])
     config["vectorizer_filepath"] = os.path.join(config["experiment_dir"], config["vectorizer_file"])
     config["model_filepath"] = os.path.join(config["experiment_dir"], config["model_file"])
+    config["tensorboard_dir"] = os.path.join(TENSORBOARD_DIR, config["experiment_id"])
+    config["history_filepath"] = os.path.join(config["experiment_dir"], config["history_file"])
 
     # Check CUDA
     if not torch.cuda.is_available():
@@ -101,7 +97,7 @@ def training_operations(config):
 
     # Vectorizer
     vectorizer = Vectorizer()
-    vectorizer.fit(df=train_df, cutoff=0)
+    vectorizer.fit(df=train_df, cutoff=config["cutoff"])
 
     # Datasets
     train_dataset = Dataset(df=train_df, vectorizer=vectorizer)
@@ -109,33 +105,27 @@ def training_operations(config):
     test_dataset = Dataset(df=test_df, vectorizer=vectorizer)
 
     # Model
-    model = DocumentClassificationModel(embedding_dim=config["embedding_dim"],
-                                        num_embeddings=len(vectorizer.X_vocab),
-                                        num_channels=config["cnn"]["num_filters"],
-                                        hidden_dim=config["fc"]["hidden_dim"],
-                                        num_classes=len(vectorizer.y_vocab),
-                                        dropout_p=config["fc"]["dropout_p"],
-                                        padding_idx=vectorizer.X_vocab.mask_index)
-    inputs = torch.zeros((1, 18), dtype=torch.long)
-    model_summary(model, inputs)
+    tensorboard = TensorboardLogger(log_dir=config["tensorboard_dir"])
+    model = Model(config=config, vectorizer=vectorizer, tensorboard=tensorboard)
+    ml_logger.info("==> Initialized model:\n{0}".format(model._model.named_modules))
 
     # Compile
     learning_rate = config["learning_rate"]
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model._model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=1)
     loss_func = nn.CrossEntropyLoss(class_weights(train_df, vectorizer))
     model.compile(learning_rate=learning_rate,
                   optimizer=optimizer,
                   scheduler=scheduler,
                   loss_func=loss_func,
-                  collate_fn=collate_fn,
-                  device=config["device"])
+                  collate_fn=collate_fn)
 
     # Train
     history = model.fit(train_dataset=train_dataset,
                         val_dataset=val_dataset,
                         num_epochs=config["num_epochs"],
-                        batch_size=config["batch_size"])
+                        batch_size=config["batch_size"],
+                        verbose=config["verbose"])
 
     # Evaluate
     history["test_loss"], history["test_accuracy"], history["performance"] = \
@@ -146,7 +136,7 @@ def training_operations(config):
     vectorizer.save(config["vectorizer_filepath"])
 
     # Save history
-    with open(os.path.join(config["experiment_dir"], "history.json"), "w") as fp:
+    with open(config["history_filepath"], "w") as fp:
         json.dump(history, fp)
     ml_logger.info("==> History:\n{0}".format(
         json.dumps(history, indent=4, sort_keys=True)))
@@ -163,24 +153,18 @@ def predict(experiment_id, X):
     # Inference operations
     config_filepath = os.path.join(EXPERIMENTS_DIR, experiment_id, "config.json")
     config = load_json(config_filepath)
+    config["device"] = torch.device("cpu")
 
     # Load vectorizer
     vectorizer = Vectorizer()
     vectorizer.load(config["vectorizer_filepath"])
 
     # Load trained model
-    model = DocumentClassificationModel(embedding_dim=config["embedding_dim"],
-                                        num_embeddings=len(vectorizer.X_vocab),
-                                        num_channels=config["cnn"]["num_filters"],
-                                        hidden_dim=config["fc"]["hidden_dim"],
-                                        num_classes=len(vectorizer.y_vocab),
-                                        dropout_p=config["fc"]["dropout_p"],
-                                        padding_idx=vectorizer.X_vocab.mask_index)
-    model.load_state_dict(torch.load(config["model_filepath"]), strict=False)
-    model = model.to("cpu")
+    model = Model(config=config, vectorizer=vectorizer)
+    model.load(config["model_filepath"])
 
     # Predict
-    prediction = model.predict(vectorizer.vectorize(clean_text(X)), classes=vectorizer.y_vocab)
+    prediction = model.predict(vectorizer.vectorize(clean_text(X)))
 
     # Results
     results = {
