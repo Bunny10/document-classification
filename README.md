@@ -7,8 +7,8 @@ Document classification with PyTorch. This repository was made using the [practi
 cd src
 virtualenv -p python3 venv
 source venv/bin/activate
-python setup.py develop
-gunicorn --log-level ERROR --workers 4 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
+python3 setup.py develop
+gunicorn --log-level ERROR --workers 4 --timeout 60 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
 ```
 ```
 tensorboard --logdir="tensorboard" --port=6006
@@ -18,7 +18,6 @@ tensorboard --logdir="tensorboard" --port=6006
 ```bash
 docker build -t document-classification:latest -f Dockerfile .
 docker run -d -p 5000:5000 --name document-classification document-classification:latest
-docker exec -it document-classification /bin/bash
 ```
 
 ### Train a model
@@ -105,25 +104,30 @@ curl --request GET \
 
 ### Directory structure
 ```
-src/
-├── api/                      - holds all API scripts
-|   ├── endpoints.py            - API endpoint definitions
-|   └── utils.py                - utility functions for endpoints
-├── datasets/                 - directory to hold datasets
-├── configs/                  - configuration files
-|   ├── logging.json            - logger configuration
-|   └── training.json           - training configuration
-├── document_classification/  - ML files
-|   ├── dataset.py              - dataset
-|   ├── model.py                - model functions
-|   ├── utils.py                - utility functions
-|   ├── vectorizer.py           - vectorize the processed data
-|   └── vocabulary.py           - vocabulary to vectorize data
-├── application.py            - application script
-├── config.py                 - application configuration
-├── requirements.txt          - python package requirements
-├── setup.py                  - custom package setup
-├── wsgi.py                   - application initialization
+document-classification/
+├── src/
+|   ├── api/                      - holds all API scripts
+|   |   ├── endpoints.py            - API endpoint definitions
+|   |   └── utils.py                - utility functions for endpoints
+|   ├── configs/                  - configuration files
+|   |   ├── logging.json            - logger configuration
+|   |   └── training.json           - training configuration
+|   ├── datasets/                 - directory to hold datasets
+|   |   └── news.csv                - data file
+|   ├── document_classification/  - ML files
+|   |   ├── dataset.py              - dataset
+|   |   ├── model.py                - model functions
+|   |   ├── utils.py                - utility functions
+|   |   ├── vectorizer.py           - vectorize the processed data
+|   |   └── vocabulary.py           - vocabulary to vectorize data
+|   ├── tests/                    - tests
+|   |   ├── e2e/                    - integration tests
+|   |   ├── unit/                   - unit tests
+|   ├── application.py            - application script
+|   ├── config.py                 - application configuration
+|   ├── requirements.txt          - python package requirements
+|   ├── setup.py                  - custom package setup
+|   ├── wsgi.py                   - application initialization
 ├── .dockerignore             - dockerignore file
 ├── .gitignore                - gitignore file
 ├── Dockerfile                - Dockerfile for the application
