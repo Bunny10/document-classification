@@ -67,4 +67,3 @@ COPY src/ $PWD/src/
 WORKDIR $PWD/src/
 RUN python3.6 setup.py develop
 CMD /usr/bin/python3.6 /usr/local/bin/gunicorn --log-level ERROR --workers 4 --timeout 60 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
-#ENTRYPOINT ["tail", "-f", "/dev/null"]

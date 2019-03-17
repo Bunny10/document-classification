@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages, dist
+from setuptools import setup, find_packages
 
 requirements = [package for package in open("requirements.txt").read().split("\n") if package]
 
