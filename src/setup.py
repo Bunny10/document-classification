@@ -10,8 +10,7 @@ setup(
     author="Goku Mohandas",
     author_email="gokumd@gmail.com",
     packages=find_packages(),
-    setup_requires=["Flask==1.0.2"],
+    setup_requires=["Flask>=1.0.2"],
     install_requires=requirements,
     python_requires=">=3.6",
-    test_suite="tests",
 )
