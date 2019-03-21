@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 import numpy as np
 import pandas as pd
 from sklearn.metrics import precision_recall_fscore_support
@@ -8,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from document_classification.utils import BatchLogger, compute_accuracy, model_summary
+from document_classification.utils import BatchLogger, compute_accuracy, model_summary, box
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
@@ -101,6 +102,10 @@ class Model(object):
         return y_pred, loss, accuracy
 
     def fit(self, train_dataset, val_dataset, num_epochs, batch_size, verbose=True):
+
+        from document_classification.utils import box
+        box("TRAINING")
+
         self.history = {
             "learning_rate": self.learning_rate,
             "train_loss": [],
@@ -258,6 +263,9 @@ class Model(object):
         return prediction
 
     def save(self, model_filepath):
+        ml_logger.info("")
+        box("Test Performance")
+        ml_logger.info(json.dumps(self.history["performance"], indent=4, sort_keys=True))
         torch.save(self._model.state_dict(), model_filepath)
 
     def load(self, model_filepath):

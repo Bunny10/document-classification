@@ -27,22 +27,50 @@ def load_json(filepath):
     return json_obj
 
 
+def box(text):
+    """Pretty boxed print."""
+    box_width = len(text) + 2
+    ml_logger.info('\n╒{}╕'.format('═' * box_width))
+    ml_logger.info('│ {} │'.format(text.upper()))
+    ml_logger.info('╘{}╛'.format('═' * box_width))
+
+
 def set_seeds(seed, cuda):
-    """ Set Numpy and PyTorch seeds."""
+    """Set Numpy and PyTorch seeds."""
     np.random.seed(seed)
     torch.manual_seed(seed)
     if cuda:
         torch.cuda.manual_seed_all(seed)
 
 
+def load_data(data_filepath):
+    """Load data from CSV to Pandas DataFrame."""
+    df = pd.read_csv(data_filepath, header=0)
+    box("Raw data")
+    ml_logger.info(df.head(5))
+    return df
+
+
 def clean_text(text):
-    """Basic text preprocessing.
-    """
+    """Basic text preprocessing."""
     text = " ".join(word.lower() for word in text.split(" "))
     text = text.replace("\n", " ")
     text = re.sub(r"[^a-zA-Z_]+", r" ", text)
     text = text.strip()
     return text
+
+
+def preprocess_data(df, X, y):
+    """Preprocess the data."""
+    # Rename columns
+    df = df.rename(columns = {X:"X", y:"y"})
+
+    # Clean inputs
+    df.X = df.X.apply(clean_text)
+
+    box("Preprocessed data")
+    ml_logger.info(df.head(5))
+    return df
 
 
 def train_val_test_split(df, shuffle, min_samples_per_class,
@@ -61,8 +89,8 @@ def train_val_test_split(df, shuffle, min_samples_per_class,
     for category in by_category:
         class_counts[category] = len(by_category[category])
 
-    ml_logger.info("==> Classes:\n{0}".format(
-        json.dumps(class_counts, indent=4, sort_keys=True)))
+    box("Class Distribution")
+    ml_logger.info(json.dumps(class_counts, indent=4, sort_keys=True))
 
     # Create split data
     final_list = []
@@ -91,6 +119,8 @@ def train_val_test_split(df, shuffle, min_samples_per_class,
     val_df = split_df[split_df.split == "val"]
     test_df = split_df[split_df.split == "test"]
 
+    box("Split data")
+    ml_logger.info(split_df["split"].value_counts())
     return train_df, val_df, test_df
 
 
@@ -220,13 +250,14 @@ def model_summary(model, x, *args, **kwargs):
     for hook in hooks:
         hook.remove()
 
-    print ("-"*100)
-    print ("{:<15} {:>20} {:>20} {:>20} {:>20}"
+    box("Model Layers")
+    ml_logger.info("-"*100)
+    ml_logger.info("{:<15} {:>20} {:>20} {:>20} {:>20}"
         .format("Layer", "Kernel Shape", "Output Shape",
                 "# Params (K)", "# Operations (M)"))
-    print ("="*100)
+    ml_logger.info("="*100)
     input_size = list(x.size()); input_size[0] = None
-    print ("{:<15} {:>20}".format("Input", str(input_size)))
+    ml_logger.info("{:<15} {:>20}".format("Input", str(input_size)))
 
     total_params, total_macs = 0, 0
     for layer, info in summary.items():
@@ -242,22 +273,22 @@ def model_summary(model, x, *args, **kwargs):
             total_macs += repr_macs
             repr_macs = "{0:,.2f}".format(repr_macs/1000000)
 
-        print ("{:<15} {:>20} {:>20} {:>20} {:>20}"
+        ml_logger.info("{:<15} {:>20} {:>20} {:>20} {:>20}"
             .format(layer, repr_ksize, repr_out, repr_params, repr_macs))
 
         # for RNN, describe inner weights (i.e. w_hh, w_ih)
         for inner_name, inner_shape in info["inner"].items():
-            print ("  {:<13} {:>20}".format(inner_name, str(inner_shape)))
+            ml_logger.info("  {:<13} {:>20}".format(inner_name, str(inner_shape)))
 
-    print ("="*100)
-    print ("# Params:     {0:,.2f}K".format(total_params/1000))
-    print ("# Operations: {0:,.2f}M".format(total_macs/1000000))
-    print ("-"*100)
-    print ("Input:         [batch_size, ...]")
-    print ("Linear/weight: [input_hidden_dim, output_hidden_dim]")
-    print ("Embedding:     [num_tokens, embedding_dim]")
-    print ("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
-    print ("-"*100)
+    ml_logger.info("="*100)
+    ml_logger.info("# Params:     {0:,.2f}K".format(total_params/1000))
+    ml_logger.info("# Operations: {0:,.2f}M".format(total_macs/1000000))
+    ml_logger.info("-"*100)
+    # ml_logger.info("Input:         [batch_size, ...]")
+    # ml_logger.info("Linear/weight: [input_hidden_dim, output_hidden_dim]")
+    # ml_logger.info("Embedding:     [num_tokens, embedding_dim]")
+    # ml_logger.info("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
+    # ml_logger.info("-"*100)
 
 class BatchLogger(object):
     def __init__(self, train_dataset, val_dataset, batch_size):
