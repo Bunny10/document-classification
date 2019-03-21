@@ -9,7 +9,7 @@ virtualenv -p python3 venv
 source venv/bin/activate
 python3 setup.py develop
 python3 -m pytest tests
-gunicorn --log-level ERROR --workers 4 --timeout 60 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
+gunicorn --log-level ERROR --workers 4 --timeout 60 --graceful-timeout 30 --bind 0.0.0.0:5000 --access-logfile - --error-logfile - --reload wsgi
 ```
 ```
 tensorboard --logdir="tensorboard" --port=6006

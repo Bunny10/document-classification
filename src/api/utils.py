@@ -18,9 +18,10 @@ from config import DATA_DIR, EXPERIMENTS_DIR, TENSORBOARD_DIR
 from document_classification.dataset import Dataset
 from document_classification.model import Model
 from document_classification.utils import class_weights, clean_text, \
-                                          collate_fn, load_json, \
+                                          collate_fn, load_json, box, \
                                           set_seeds, TensorboardLogger, \
-                                          train_val_test_split
+                                          train_val_test_split, \
+                                          load_data, preprocess_data
 from document_classification.vectorizer import Vectorizer
 
 # Logger
@@ -63,7 +64,7 @@ def set_up(config):
     os.makedirs(config["experiment_dir"])
 
     # Expand file paths
-    config["data_filepath"] = os.path.join(DATA_DIR, config["data_file"])
+    config["data_filepath"] = os.path.join(DATA_DIR, config["data"]["data_file"])
     config["vectorizer_filepath"] = os.path.join(config["experiment_dir"], config["vectorizer_file"])
     config["model_filepath"] = os.path.join(config["experiment_dir"], config["model_file"])
     config["tensorboard_dir"] = os.path.join(TENSORBOARD_DIR, config["experiment_id"])
@@ -81,19 +82,15 @@ def training_operations(config):
     """Training operations."""
 
     # Load data
-    df = pd.read_csv(config["data_filepath"], header=0)
-    df.columns = ["X", "y"]
+    df = load_data(data_filepath=config["data_filepath"])
 
     # Preprocess data
-    df.X = df.X.apply(clean_text)
-    ml_logger.info(df.head(1))
+    df = preprocess_data(df=df, X=config["data"]["X"], y=config["data"]["y"] )
 
     # Split data
     train_df, val_df, test_df = train_val_test_split(
         df=df, shuffle=True, min_samples_per_class=5,
         train_size=0.7, val_size=0.15, test_size=0.15)
-    ml_logger.info("train: {0}, val: {1}, test: {2}".format(
-        len(train_df), len(val_df), len(test_df)))
 
     # Vectorizer
     vectorizer = Vectorizer()
@@ -107,7 +104,6 @@ def training_operations(config):
     # Model
     tensorboard = TensorboardLogger(log_dir=config["tensorboard_dir"])
     model = Model(config=config, vectorizer=vectorizer, tensorboard=tensorboard)
-    ml_logger.info("==> Initialized model:\n{0}".format(model._model.named_modules))
 
     # Compile
     learning_rate = config["learning_rate"]
@@ -138,8 +134,6 @@ def training_operations(config):
     # Save history
     with open(config["history_filepath"], "w") as fp:
         json.dump(history, fp)
-    ml_logger.info("==> History:\n{0}".format(
-        json.dumps(history, indent=4, sort_keys=True)))
 
 
 def predict(experiment_id, X):

@@ -6,6 +6,11 @@
   "train_size": 0.7,
   "val_size": 0.15,
   "test_size": 0.15,
+  "data": {
+    "data_file": "news.csv",
+    "X": "title",
+    "y": "genre"
+  },
   "data_file": "news.csv",
   "vectorizer_file": "vectorizer.json",
   "model_file": "model.pth",
