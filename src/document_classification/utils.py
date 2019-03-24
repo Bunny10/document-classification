@@ -7,12 +7,16 @@ import logging
 import numpy as np
 import pandas as pd
 import re
+from shutil import copyfile
 import tensorflow as tf
 import time
 import torch
+import yaml
+
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
+
 
 def create_dirs(dirpath):
     """Creating directories."""
@@ -27,8 +31,21 @@ def load_json(filepath):
     return json_obj
 
 
-def box(text):
-    """Pretty boxed print."""
+def load_yaml(filepath):
+    """Load a yaml file."""
+    with open(filepath, "r") as fp:
+        yaml_obj = yaml.load(fp, Loader=yaml.FullLoader)
+    return yaml_obj
+
+
+def save_yaml(json_obj, filepath):
+    """Save a dictionary to a yaml file."""
+    with open(filepath, "w") as fp:
+        yaml.dump(json_obj, fp, default_flow_style=False, indent=4)
+
+
+def wrap_text(text):
+    """Pretty box print."""
     box_width = len(text) + 2
     ml_logger.info('\n╒{}╕'.format('═' * box_width))
     ml_logger.info('│ {} │'.format(text.upper()))
@@ -43,53 +60,33 @@ def set_seeds(seed, cuda):
         torch.cuda.manual_seed_all(seed)
 
 
-def load_data(data_filepath):
+def load_data(data_csv):
     """Load data from CSV to Pandas DataFrame."""
-    df = pd.read_csv(data_filepath, header=0)
-    box("Raw data")
+    df = pd.read_csv(data_csv, header=0)
+    wrap_text("Raw data")
     ml_logger.info(df.head(5))
     return df
 
 
-def clean_text(text):
-    """Basic text preprocessing."""
-    text = " ".join(word.lower() for word in text.split(" "))
-    text = text.replace("\n", " ")
-    text = re.sub(r"[^a-zA-Z_]+", r" ", text)
-    text = text.strip()
-    return text
-
-
-def preprocess_data(df, X, y):
-    """Preprocess the data."""
-    # Rename columns
-    df = df.rename(columns = {X:"X", y:"y"})
-
-    # Clean inputs
-    df.X = df.X.apply(clean_text)
-
-    box("Preprocessed data")
-    ml_logger.info(df.head(5))
-    return df
-
-
-def train_val_test_split(df, shuffle, min_samples_per_class,
-                         train_size, val_size, test_size):
+def train_val_test_split(df, train_size, val_size, test_size,
+                         min_samples_per_class, shuffle):
     """Split the data into train/val/test splits."""
+
     # Split by category
     items = collections.defaultdict(list)
     for _, row in df.iterrows():
         items[row.y].append(row.to_dict())
 
     # Clean
-    by_category = {k: v for k, v in items.items() if len(v) >= min_samples_per_class}
+    by_category = {k: v for k, v in items.items() \
+                   if len(v) >= min_samples_per_class}
 
     # Class counts
     class_counts = {}
     for category in by_category:
         class_counts[category] = len(by_category[category])
 
-    box("Class Distribution")
+    wrap_text("Class Distribution")
     ml_logger.info(json.dumps(class_counts, indent=4, sort_keys=True))
 
     # Create split data
@@ -119,7 +116,7 @@ def train_val_test_split(df, shuffle, min_samples_per_class,
     val_df = split_df[split_df.split == "val"]
     test_df = split_df[split_df.split == "test"]
 
-    box("Split data")
+    wrap_text("Split data")
     ml_logger.info(split_df["split"].value_counts())
     return train_df, val_df, test_df
 
@@ -250,7 +247,7 @@ def model_summary(model, x, *args, **kwargs):
     for hook in hooks:
         hook.remove()
 
-    box("Model Layers")
+    wrap_text("Model Layers")
     ml_logger.info("-"*100)
     ml_logger.info("{:<15} {:>20} {:>20} {:>20} {:>20}"
         .format("Layer", "Kernel Shape", "Output Shape",
@@ -291,24 +288,57 @@ def model_summary(model, x, *args, **kwargs):
     # ml_logger.info("-"*100)
 
 class BatchLogger(object):
-    def __init__(self, train_dataset, val_dataset, batch_size):
-        num_train_batches = train_dataset.get_num_batches(batch_size)
-        num_val_batches = val_dataset.get_num_batches(batch_size)
-        self.num_samples = len(train_dataset) + len(val_dataset)
-        self.num_batches = num_train_batches + num_val_batches
+    def __init__(self, train_dataset, val_dataset, test_dataset, batch_size):
+        self.datasets = {
+            "train": train_dataset,
+            "val": val_dataset,
+            "test": test_dataset
+        }
         self.batch_size = batch_size
         self.progress_bar_length = 12
+        self.reset_metrics()
 
-    def log(self, batch_index, lr, train_loss, train_acc, val_loss=0, val_acc=0, start=None):
-        sys.stdout.write("\r")
-        sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - loss: {6:.3f} - acc: {7:.1f}% - val_loss: {8:.3f} - val_acc: {9:.1f}%".format(
-            min((batch_index+1)*self.batch_size, self.num_samples),
-            self.num_samples,
-            "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),
-            self.progress_bar_length,
-            int((time.time()-start)*(self.num_batches - (batch_index+1))),
-            lr, train_loss, train_acc, val_loss, val_acc))
-        sys.stdout.flush()
+    def reset_metrics(self):
+        self.metrics = {}
+        for dataset in ("train", "val", "test"):
+            for metric in ("loss", "accuracy"):
+                metric_name = "{0}_{1}".format(dataset, metric)
+                self.metrics[metric_name] = 0.0
+
+    def log(self, batch_index, lr, loss, accuracy, start, mode):
+        """Log metrics for a batch."""
+
+        # Reset metrics on first batch
+        if (batch_index == 0) and (mode == "train"):
+            self.reset_metrics()
+        dataset = self.datasets[mode]
+        self.num_samples = len(dataset)
+        self.num_batches = dataset.get_num_batches(self.batch_size)
+        self.metrics["{0}_loss".format(mode)] = loss
+        self.metrics["{0}_accuracy".format(mode)] = accuracy
+
+        # Log
+        if mode in ("train", "val"):
+            sys.stdout.write("\r")
+            sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - loss: {6:.3f} - accuracy: {7:.1f}% - val_loss: {8:.3f} - val_accuracy: {9:.1f}%".format(
+                min((batch_index+1)*self.batch_size, self.num_samples),
+                self.num_samples,
+                "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),
+                self.progress_bar_length,
+                int((time.time()-start)*(self.num_batches - (batch_index+1))),
+                lr, self.metrics["train_loss"], self.metrics["train_accuracy"],
+                self.metrics["val_loss"], self.metrics["val_accuracy"]))
+            sys.stdout.flush()
+        elif mode == "test":
+            sys.stdout.write("\r")
+            sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - test_loss: {6:.3f} - test_accuracy: {7:.1f}%".format(
+                min((batch_index+1)*self.batch_size, self.num_samples),
+                self.num_samples,
+                "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),
+                self.progress_bar_length,
+                int((time.time()-start)*(self.num_batches - (batch_index+1))),
+                lr, self.metrics["test_loss"], self.metrics["test_accuracy"]))
+            sys.stdout.flush()
 
 # Credit: https://github.com/yunjey/pytorch-tutorial
 class TensorboardLogger(object):
@@ -349,14 +379,14 @@ class TensorboardLogger(object):
         self.writer.add_summary(summary, step)
         self.writer.flush()
 
-    def log(self, model, history, step):
+    def log(self, model, results, learning_rate, step):
         # Tensorboard log scalar metrics
-        self.scalar_summary("lr", history["learning_rate"], step)
+        self.scalar_summary("lr", learning_rate, step)
         for metric in ["train_loss", "val_loss"]:
-            value = history[metric][-1]
+            value = results[metric][-1]
             self.scalar_summary("loss/{0}".format(metric), value, step)
         for metric in ["train_accuracy", "val_accuracy"]:
-            value = history[metric][-1]
+            value = results[metric][-1]
             self.scalar_summary("accuracy/{0}".format(metric), value, step)
 
         # Tensorboard log historgram weights

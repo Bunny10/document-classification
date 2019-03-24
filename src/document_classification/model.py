@@ -8,16 +8,20 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 
-from document_classification.utils import BatchLogger, compute_accuracy, model_summary, box
+from document_classification.dataset import Dataset
+from document_classification.utils import BatchLogger, compute_accuracy, \
+                                          model_summary, wrap_text, \
+                                          collate_fn, class_weights
 
 # Logger
 ml_logger = logging.getLogger("ml_logger")
 
-
 class DocumentClassificationModel(nn.Module):
     def __init__(self, embedding_dim, num_embeddings, num_channels,
-                 hidden_dim, num_classes, dropout_p, padding_idx=0):
+                 filter_sizes, hidden_dim, num_classes, dropout_p,
+                 padding_idx=0, freeze_embeddings=False):
         super(DocumentClassificationModel, self).__init__()
 
         # Emebddings
@@ -27,20 +31,30 @@ class DocumentClassificationModel(nn.Module):
 
         # Conv weights
         self.conv = nn.ModuleList([nn.Conv1d(embedding_dim, num_channels,
-                                  kernel_size=f) for f in [2,3,4]])
+                                  kernel_size=f) for f in filter_sizes])
 
         # FC weights
         self.dropout = nn.Dropout(dropout_p)
         self.fc1 = nn.Linear(num_channels*3, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, num_classes)
 
-        # Toggle to False to freeze embeddings
-        self.embeddings.weight.requires_grad = True
+        # Freeze embeddings
+        if freeze_embeddings:
+            self.embeddings.weight.requires_grad = False
 
     def forward(self, X, channel_first=False, apply_softmax=False):
         """Forward pass."""
-        # Embed
+
+        # ╒═══════╕
+        # │ Embed │
+        # ╘═══════╛
+
+        # Embed inputs
         X = self.embeddings(X)
+
+        # ╒════════╕
+        # │ Encode │
+        # ╘════════╛
 
         # Rearrange input so num_channels is in dim 1 (N, C, L)
         if not channel_first:
@@ -57,6 +71,10 @@ class DocumentClassificationModel(nn.Module):
         # Concat conv outputs
         z = torch.cat([z1, z2, z3], 1)
 
+        # ╒════════╕
+        # │ Decode │
+        # ╘════════╛
+
         # FC layers
         z = self.dropout(z)
         z = self.fc1(z)
@@ -70,176 +88,208 @@ class DocumentClassificationModel(nn.Module):
 
 
 class Model(object):
-    def __init__(self, config, vectorizer, tensorboard=None):
+    def __init__(self, model_config, vectorizer, model_filepath=None, tensorboard=None):
         """Initialize the model."""
         self._model = DocumentClassificationModel(
-            embedding_dim=config["embedding_dim"],
+            embedding_dim=model_config["embeddings"]["embedding_dim"],
             num_embeddings=len(vectorizer.X_vocab),
-            num_channels=config["cnn"]["num_filters"],
-            hidden_dim=config["fc"]["hidden_dim"],
+            num_channels=model_config["cnn"]["num_filters"],
+            filter_sizes=model_config["cnn"]["filter_sizes"],
+            hidden_dim=model_config["fc"]["hidden_dim"],
             num_classes=len(vectorizer.y_vocab),
-            dropout_p=config["fc"]["dropout_p"],
-            padding_idx=vectorizer.X_vocab.mask_index).to(config["device"])
+            dropout_p=model_config["fc"]["dropout_p"],
+            padding_idx=vectorizer.X_vocab.mask_index,
+            freeze_embeddings=model_config["embeddings"]["freeze_embeddings"])
         self.vectorizer = vectorizer
-        self.device = config["device"]
+        self.model_filepath = model_filepath
         self.tensorboard = tensorboard
 
+    def summary(self, df):
         # Model summary
-        inputs = torch.zeros((1, 18), dtype=torch.long)
-        model_summary(self._model, inputs)
+        dataset = Dataset(df=pd.DataFrame(df, index=[0]),
+                          vectorizer=self.vectorizer)
+        loader = dataset.generate_batches(batch_size=1,
+                                          collate_fn=collate_fn,
+                                          device=torch.device("cpu"))
+        for batch_dict in loader:
+            inputs = batch_dict["X"]
+            model_summary(self._model, inputs)
 
-    def compile(self, learning_rate, optimizer, scheduler, loss_func, collate_fn):
+    def compile(self, train_df, learning_rate, early_stopping_criteria):
         self.learning_rate = learning_rate
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.loss_func = loss_func
-        self.collate_fn = collate_fn
+        self.optimizer = optim.Adam(self._model.parameters(), lr=self.learning_rate)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode="min", factor=0.5, patience=1)
+        self.loss_func = nn.CrossEntropyLoss(class_weights(train_df, self.vectorizer))
+        self.early_stopping_criteria = early_stopping_criteria
+        self.num_bad_epochs = 0
 
-    def forward_pass(self, inputs, outputs):
-        y_pred = self._model(inputs)
-        loss = self.loss_func(y_pred, outputs)
-        accuracy = compute_accuracy(y_pred, outputs)
-        return y_pred, loss, accuracy
+    def process_batch(self, batch_index, batch_dict, mode):
+        """Process a batch."""
 
-    def fit(self, train_dataset, val_dataset, num_epochs, batch_size, verbose=True):
+        # Forward pass
+        predictions = self._model(batch_dict["X"])
+        batch_loss = self.loss_func(predictions, batch_dict["y"])
+        batch_accuracy = compute_accuracy(predictions, batch_dict["y"])
 
-        from document_classification.utils import box
-        box("TRAINING")
+        if mode == "train":
+            # Use loss to produce gradients and update weights
+            self.optimizer.zero_grad()
+            batch_loss.backward()
+            self.optimizer.step()
 
-        self.history = {
-            "learning_rate": self.learning_rate,
+        return predictions, batch_loss, batch_accuracy
+
+    def process_epoch(self, dataset, batch_size, mode, batch_logger):
+        """Process an epoch."""
+
+        # Generate batches
+        loader = dataset.generate_batches(batch_size=batch_size,
+                                          collate_fn=collate_fn,
+                                          device=self.device)
+        start = time.time()
+        epoch_loss = 0.0
+        epoch_accuracy = 0.0
+        if mode == "train": self._model.train()
+        else: self._model.eval()
+
+        # Process batches
+        y_true = []
+        y_pred = []
+        for batch_index, batch_dict in enumerate(loader):
+
+            # Process batch
+            predictions, batch_loss, batch_accuracy = self.process_batch(
+                batch_index=batch_index, batch_dict=batch_dict, mode=mode)
+
+            # Store rseults
+            probabilities, indices = predictions.max(dim=1)
+            indices_list = indices.cpu().numpy().tolist()
+            y_true.extend(batch_dict["y"].cpu())
+            y_pred.extend(indices_list)
+
+            # Update metrics
+            epoch_loss += (batch_loss.to("cpu").item() - epoch_loss) / (batch_index + 1)
+            epoch_accuracy += (batch_accuracy - epoch_accuracy) / (batch_index + 1)
+
+            # Log
+            batch_logger.log(batch_index=batch_index,
+                             lr=self.optimizer.param_groups[0]["lr"],
+                             loss=epoch_loss,
+                             accuracy=epoch_accuracy,
+                             start=start,
+                             mode=mode)
+            start = time.time()
+
+        return epoch_loss, epoch_accuracy, y_true, y_pred
+
+    def fit(self, train_df, val_df, test_df, num_epochs, batch_size, cuda):
+        """Fit a model to a dataset."""
+
+        # Set device
+        self.device = torch.device("cuda" if cuda else "cpu")
+        self._model.to(self.device)
+
+        # Datasets
+        train_dataset = Dataset(df=train_df, vectorizer=self.vectorizer)
+        val_dataset = Dataset(df=val_df, vectorizer=self.vectorizer)
+        test_dataset = Dataset(df=test_df, vectorizer=self.vectorizer)
+
+        # Metrics
+        self.results = {
             "train_loss": [],
             "train_accuracy": [],
             "val_loss": [],
-            "val_accuracy": []
+            "val_accuracy": [],
+            "test_performance": {}
         }
+
+        # Batch loggers
         self.batch_logger = BatchLogger(train_dataset=train_dataset,
                                         val_dataset=val_dataset,
+                                        test_dataset=test_dataset,
                                         batch_size=batch_size)
 
+        # Epochs
+        wrap_text("Training")
         for epoch_index in range(num_epochs):
-
             print ("\nEpoch {0}/{1}".format(epoch_index+1, num_epochs,))
 
-            # Training
-            train_loader = train_dataset.generate_batches(
-                batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
-            start = time.time()
-            running_train_loss = 0.0
-            running_train_accuracy = 0.0
-            self._model.train()
+            # ╒══════════╕
+            # │ Training │
+            # ╘══════════╛
+            train_loss, train_accuracy, _, _ = self.process_epoch(dataset=train_dataset,
+                                                                  batch_size=batch_size,
+                                                                  batch_logger=self.batch_logger,
+                                                                  mode="train")
+            self.results["train_loss"].append(train_loss)
+            self.results["train_accuracy"].append(train_accuracy)
 
-            for train_batch_index, batch_dict in enumerate(train_loader):
+            # ╒════════════╕
+            # │ Validation │
+            # ╘════════════╛
+            val_loss, val_accuracy, _, _ = self.process_epoch(dataset=val_dataset,
+                                                              batch_size=batch_size,
+                                                              batch_logger=self.batch_logger,
+                                                              mode="val")
+            self.results["val_loss"].append(val_loss)
+            self.results["val_accuracy"].append(val_accuracy)
 
-                # Zero the gradients
-                self.optimizer.zero_grad()
-
-                # Forward pass
-                _, loss, accuracy = self.forward_pass(
-                    inputs=batch_dict["X"], outputs=batch_dict["y"])
-
-                # Use loss to produce gradients
-                loss.backward()
-
-                # Use optimizer to take gradient step
-                self.optimizer.step()
-
-                # Update metrics
-                running_train_loss += (loss.to("cpu").item() - running_train_loss) / (train_batch_index + 1)
-                running_train_accuracy += (accuracy - running_train_accuracy) / (train_batch_index + 1)
-
-                # Log batch
-                if verbose:
-                    self.batch_logger.log(batch_index=train_batch_index,
-                                          lr=self.history["learning_rate"],
-                                          train_loss=running_train_loss,
-                                          train_acc=running_train_accuracy,
-                                          start=start)
-                    start = time.time()
-
-
-            self.history["train_loss"].append(running_train_loss)
-            self.history["train_accuracy"].append(running_train_accuracy)
-
-            # Validation
-            val_loader = val_dataset.generate_batches(
-                batch_size=batch_size, collate_fn=self.collate_fn, device=self.device)
-            running_val_loss = 0.0
-            running_val_accuracy = 0.0
-            self._model.eval()
-
-            for val_batch_index, batch_dict in enumerate(val_loader):
-
-                # Forward pass
-                _, loss, accuracy = self.forward_pass(
-                    inputs=batch_dict["X"], outputs=batch_dict["y"])
-
-                # Update metrics
-                running_val_loss += (loss.to("cpu").item() - running_val_loss) / (val_batch_index + 1)
-                running_val_accuracy += (accuracy - running_val_accuracy) / (val_batch_index + 1)
-
-                # Log batch
-                if verbose:
-                    self.batch_logger.log(batch_index=train_batch_index+val_batch_index+1,
-                                          lr=self.history["learning_rate"],
-                                          train_loss=running_train_loss,
-                                          train_acc=running_train_accuracy,
-                                          val_loss=running_val_loss,
-                                          val_acc=running_val_accuracy,
-                                          start=start)
-                    start = time.time()
-
-            self.history["val_loss"].append(running_val_loss)
-            self.history["val_accuracy"].append(running_val_accuracy)
-            self.scheduler.step(self.history["val_loss"][-1])
+            # Update learning rate
+            self.scheduler.step(self.results["val_loss"][-1])
+            if (self.end_training()):
+                break # end training
 
             # Log to tensorboard
             if self.tensorboard:
-                self.tensorboard.log(model=self._model, history=self.history, step=epoch_index)
+                self.tensorboard.log(model=self._model,
+                                     results=self.results,
+                                     learning_rate=self.optimizer.param_groups[0]["lr"],
+                                     step=epoch_index)
 
-        return self.history
-
-    def evaluate(self, dataset):
-        loader = dataset.generate_batches(
-            batch_size=min(128, len(dataset)), collate_fn=self.collate_fn, device=self.device)
-        running_loss = 0.0
-        running_accuracy = 0.0
-        self._model.eval()
-
-        true = []
-        pred = []
-        for batch_index, batch_dict in enumerate(loader):
-
-            # Forward pass
-            y_pred, loss, accuracy = self.forward_pass(
-                inputs=batch_dict["X"], outputs=batch_dict["y"])
-
-            # Update metrics
-            running_loss += (loss.to("cpu").item() - running_loss) / (batch_index + 1)
-            running_accuracy += (accuracy - running_accuracy) / (batch_index + 1)
-
-            # Store
-            y_prob, indices = y_pred.max(dim=1)
-            indices_list = indices.cpu().numpy().tolist()
-            true.extend(batch_dict["y"].cpu())
-            pred.extend(indices_list)
+        # ╒═════════╕
+        # │ Testing │
+        # ╘═════════╛
+        ml_logger.info("\n")
+        wrap_text("Testing")
+        test_loss, test_accuracy, y_true, y_pred = self.process_epoch(dataset=test_dataset,
+                                                                      batch_size=batch_size,
+                                                                      batch_logger=self.batch_logger,
+                                                                      mode="test")
+        self.results["test_performance"]["test_loss"] = test_loss
+        self.results["test_performance"]["test_accuracy"]= test_accuracy
 
         # Metrics
-        metrics = precision_recall_fscore_support(true, pred)
+        metrics = precision_recall_fscore_support(y_true, y_pred)
 
-        # Results
-        performance = {}
-        classes = list(dataset.vectorizer.y_vocab.token_to_idx.keys())
+        # Per-class performance
+        self.results["test_performance"]["class_performance"] = {}
+        classes = list(self.vectorizer.y_vocab.token_to_idx.keys())
         for i in range(len(classes)):
-            _class = classes[i]
-            precision = metrics[0][i]
-            recall = metrics[1][i]
-            f1 = metrics[2][i]
-            num_samples = np.float64(metrics[3][i])
-            performance[_class] = {"precision": precision, "recall": recall,
-                               "f1": f1, "num_samples": num_samples}
+            self.results["test_performance"]["class_performance"][classes[i]] = {
+                "precision": metrics[0][i]*100.0,
+                "recall": metrics[1][i]*100.0,
+                "f1": metrics[2][i]*100.0,
+                "num_samples": np.float64(metrics[3][i])
+            }
+        ml_logger.info("\n")
+        ml_logger.info(json.dumps(self.results["test_performance"], indent=4, sort_keys=True))
 
-        return running_loss, running_accuracy, performance
+        return self.results
+
+    def end_training(self):
+        """End the training loop if number of regressing
+        epochs reached the early stopping criteria."""
+        save_model = True
+        if self.scheduler.num_bad_epochs >= self.scheduler.patience:
+            self.num_bad_epochs += 1
+            save_model = False
+        if self.num_bad_epochs >= self.early_stopping_criteria:
+            print ("\nEnding training early!")
+            return True
+        else:
+            if save_model:
+                self.save(self.model_filepath)
+            return False
 
     def predict(self, X):
         self._model.eval()
@@ -263,9 +313,6 @@ class Model(object):
         return prediction
 
     def save(self, model_filepath):
-        ml_logger.info("")
-        box("Test Performance")
-        ml_logger.info(json.dumps(self.history["performance"], indent=4, sort_keys=True))
         torch.save(self._model.state_dict(), model_filepath)
 
     def load(self, model_filepath):

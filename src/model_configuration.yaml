@@ -1,0 +1,35 @@
+data:
+    input_feature: title
+    output_feature: genre
+
+preprocessing:
+    split_level: word
+    allow_numbers: false
+    allow_punctuation: false
+    case_sensitive: false
+    min_token_frequency: 3
+
+splitting:
+    shuffle: true
+    train_size: 0.7
+    val_size: 0.15
+    test_size: 0.15
+    min_samples_per_class: 5
+
+model:
+    cnn:
+        filter_sizes: [2,3,4]
+        num_filters: 50
+    embeddings:
+        embedding_dim: 256
+        freeze_embeddings: false
+    fc:
+        dropout_p: 0.8
+        hidden_dim: 50
+
+training:
+    num_epochs: 15
+    batch_size: 128
+    learning_rate: 0.001
+    early_stopping_criteria: 3
+    cuda: false
