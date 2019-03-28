@@ -69,8 +69,8 @@ def load_data(data_csv):
     print (df.head(5))
     return df
 
-def train_val_test_split(df, train_size, val_size, test_size,
-                         min_samples_per_class, shuffle):
+def DistributedSplit(df, train_size, val_size, test_size,
+                     min_samples_per_class, shuffle):
     """Split the data into train/val/test splits that
     have equal class distributions."""
 

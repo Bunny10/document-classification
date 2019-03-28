@@ -19,7 +19,7 @@ from document_classification.model import Model
 from document_classification.utils import class_weights, \
                                           collate_fn, load_json, load_yaml, wrap_text, \
                                           set_seeds, TensorboardLogger, \
-                                          train_val_test_split, \
+                                          DistributedSplit, \
                                           load_data, save_yaml
 from document_classification.vectorizer import Vectorizer
 
@@ -61,12 +61,12 @@ preprocessor = Preprocessor(lower=config["preprocessing"]["lower"],
 df = preprocessor.clean_df(df)
 
 # Split data
-train_df, val_df, test_df = train_val_test_split(df=df,
-                                                 train_size=config["splitting"]["train_size"],
-                                                 val_size=config["splitting"]["val_size"],
-                                                 test_size=config["splitting"]["test_size"],
-                                                 min_samples_per_class=config["splitting"]["min_samples_per_class"],
-                                                 shuffle=config["splitting"]["shuffle"])
+train_df, val_df, test_df = DistributedSplit(df=df,
+                                             train_size=config["splitting"]["train_size"],
+                                             val_size=config["splitting"]["val_size"],
+                                             test_size=config["splitting"]["test_size"],
+                                             min_samples_per_class=config["splitting"]["min_samples_per_class"],
+                                             shuffle=config["splitting"]["shuffle"])
 
 # Vectorizer
 vectorizer = Vectorizer()
