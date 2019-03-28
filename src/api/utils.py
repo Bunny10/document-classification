@@ -18,7 +18,7 @@ from config import DATA_DIR, EXPERIMENTS_DIR, TENSORBOARD_DIR
 from document_classification.dataset import Dataset
 from document_classification.model import Model
 from document_classification.utils import class_weights, clean_text, \
-                                          collate_fn, load_json, box, \
+                                          collate_fn, load_json, wrap_text, \
                                           set_seeds, TensorboardLogger, \
                                           train_val_test_split, \
                                           load_data, preprocess_data
@@ -85,7 +85,9 @@ def training_operations(config):
     df = load_data(data_filepath=config["data_filepath"])
 
     # Preprocess data
-    df = preprocess_data(df=df, X=config["data"]["X"], y=config["data"]["y"] )
+    df = preprocess_data(df=df,
+                         input_features=config["input_features"],
+                         output_features=config["output_features"])
 
     # Split data
     train_df, val_df, test_df = train_val_test_split(

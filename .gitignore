@@ -11,6 +11,7 @@ experiments/
 logs/
 tensorboard/
 *.log
+exp1/
 
 # C extensions
 *.so
