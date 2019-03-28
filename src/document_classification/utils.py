@@ -14,10 +14,6 @@ import torch
 import yaml
 
 
-# Logger
-ml_logger = logging.getLogger("ml_logger")
-
-
 def create_dirs(dirpath):
     """Creating directories."""
     if not os.path.exists(dirpath):
@@ -27,8 +23,8 @@ def create_dirs(dirpath):
 def load_json(filepath):
     """Load a json file."""
     with open(filepath, "r") as fp:
-        json_obj = json.load(fp)
-    return json_obj
+        obj = json.load(fp)
+    return obj
 
 
 def load_yaml(filepath):
@@ -38,18 +34,24 @@ def load_yaml(filepath):
     return yaml_obj
 
 
-def save_yaml(json_obj, filepath):
+def save_json(obj, filepath):
+    """Save a dictionary to a json file."""
+    with open(filepath, "w") as fp:
+        json.dump(obj, fp, indent=4)
+
+
+def save_yaml(obj, filepath):
     """Save a dictionary to a yaml file."""
     with open(filepath, "w") as fp:
-        yaml.dump(json_obj, fp, default_flow_style=False, indent=4)
+        yaml.dump(obj, fp, default_flow_style=False, indent=4)
 
 
 def wrap_text(text):
     """Pretty box print."""
     box_width = len(text) + 2
-    ml_logger.info('\n╒{}╕'.format('═' * box_width))
-    ml_logger.info('│ {} │'.format(text.upper()))
-    ml_logger.info('╘{}╛'.format('═' * box_width))
+    print ('\n╒{}╕'.format('═' * box_width))
+    print ('│ {} │'.format(text.upper()))
+    print ('╘{}╛'.format('═' * box_width))
 
 
 def set_seeds(seed, cuda):
@@ -64,13 +66,13 @@ def load_data(data_csv):
     """Load data from CSV to Pandas DataFrame."""
     df = pd.read_csv(data_csv, header=0)
     wrap_text("Raw data")
-    ml_logger.info(df.head(5))
+    print (df.head(5))
     return df
-
 
 def train_val_test_split(df, train_size, val_size, test_size,
                          min_samples_per_class, shuffle):
-    """Split the data into train/val/test splits."""
+    """Split the data into train/val/test splits that
+    have equal class distributions."""
 
     # Split by category
     items = collections.defaultdict(list)
@@ -87,7 +89,7 @@ def train_val_test_split(df, train_size, val_size, test_size,
         class_counts[category] = len(by_category[category])
 
     wrap_text("Class Distribution")
-    ml_logger.info(json.dumps(class_counts, indent=4, sort_keys=True))
+    print (json.dumps(class_counts, indent=4, sort_keys=True))
 
     # Create split data
     final_list = []
@@ -117,7 +119,7 @@ def train_val_test_split(df, train_size, val_size, test_size,
     test_df = split_df[split_df.split == "test"]
 
     wrap_text("Split data")
-    ml_logger.info(split_df["split"].value_counts())
+    print (split_df["split"].value_counts())
     return train_df, val_df, test_df
 
 
@@ -172,7 +174,7 @@ def collate_fn(batch):
 def compute_accuracy(y_pred, y_target):
     _, y_pred_indices = y_pred.max(dim=1)
     n_correct = torch.eq(y_pred_indices, y_target).sum().item()
-    return n_correct / len(y_pred_indices) * 100
+    return n_correct / len(y_pred_indices)
 
 
 # Extended from https://github.com/nmhkahn/torchsummaryX
@@ -248,13 +250,13 @@ def model_summary(model, x, *args, **kwargs):
         hook.remove()
 
     wrap_text("Model Layers")
-    ml_logger.info("-"*100)
-    ml_logger.info("{:<15} {:>20} {:>20} {:>20} {:>20}"
+    print ("-"*100)
+    print ("{:<15} {:>20} {:>20} {:>20} {:>20}"
         .format("Layer", "Kernel Shape", "Output Shape",
                 "# Params (K)", "# Operations (M)"))
-    ml_logger.info("="*100)
+    print ("="*100)
     input_size = list(x.size()); input_size[0] = None
-    ml_logger.info("{:<15} {:>20}".format("Input", str(input_size)))
+    print ("{:<15} {:>20}".format("Input", str(input_size)))
 
     total_params, total_macs = 0, 0
     for layer, info in summary.items():
@@ -270,22 +272,22 @@ def model_summary(model, x, *args, **kwargs):
             total_macs += repr_macs
             repr_macs = "{0:,.2f}".format(repr_macs/1000000)
 
-        ml_logger.info("{:<15} {:>20} {:>20} {:>20} {:>20}"
+        print ("{:<15} {:>20} {:>20} {:>20} {:>20}"
             .format(layer, repr_ksize, repr_out, repr_params, repr_macs))
 
         # for RNN, describe inner weights (i.e. w_hh, w_ih)
         for inner_name, inner_shape in info["inner"].items():
-            ml_logger.info("  {:<13} {:>20}".format(inner_name, str(inner_shape)))
+            print ("  {:<13} {:>20}".format(inner_name, str(inner_shape)))
 
-    ml_logger.info("="*100)
-    ml_logger.info("# Params:     {0:,.2f}K".format(total_params/1000))
-    ml_logger.info("# Operations: {0:,.2f}M".format(total_macs/1000000))
-    ml_logger.info("-"*100)
-    # ml_logger.info("Input:         [batch_size, ...]")
-    # ml_logger.info("Linear/weight: [input_hidden_dim, output_hidden_dim]")
-    # ml_logger.info("Embedding:     [num_tokens, embedding_dim]")
-    # ml_logger.info("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
-    # ml_logger.info("-"*100)
+    print ("="*100)
+    print ("# Params:     {0:,.2f}K".format(total_params/1000))
+    print ("# Operations: {0:,.2f}M".format(total_macs/1000000))
+    print ("-"*100)
+    # print ("Input:         [batch_size, ...]")
+    # print ("Linear/weight: [input_hidden_dim, output_hidden_dim]")
+    # print ("Embedding:     [num_tokens, embedding_dim]")
+    # print ("Conv:          [input_dim, output_dim (num_filters), kernel_size]")
+    # print ("-"*100)
 
 class BatchLogger(object):
     def __init__(self, train_dataset, val_dataset, test_dataset, batch_size):
@@ -320,7 +322,7 @@ class BatchLogger(object):
         # Log
         if mode in ("train", "val"):
             sys.stdout.write("\r")
-            sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - loss: {6:.3f} - accuracy: {7:.1f}% - val_loss: {8:.3f} - val_accuracy: {9:.1f}%".format(
+            sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - loss: {6:.3f} - accuracy: {7:.3f} - val_loss: {8:.3f} - val_accuracy: {9:.3f}".format(
                 min((batch_index+1)*self.batch_size, self.num_samples),
                 self.num_samples,
                 "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),
@@ -331,7 +333,7 @@ class BatchLogger(object):
             sys.stdout.flush()
         elif mode == "test":
             sys.stdout.write("\r")
-            sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - test_loss: {6:.3f} - test_accuracy: {7:.1f}%".format(
+            sys.stdout.write("{0}/{1} [{2:<{3}}] - ETA: {4}s - lr: {5:.2E} - test_loss: {6:.3f} - test_accuracy: {7:.3f}".format(
                 min((batch_index+1)*self.batch_size, self.num_samples),
                 self.num_samples,
                 "="*int(self.progress_bar_length*(batch_index+1)/self.num_batches),

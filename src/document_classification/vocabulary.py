@@ -15,12 +15,11 @@ class Vocabulary(object):
         # Index to token
         self.idx_to_token = {idx: token for token, idx in self.token_to_idx.items()}
 
-    def to_serializable(self):
-        return {'token_to_idx': self.token_to_idx}
+    def __str__(self):
+        return "<Vocabulary(size=%d)>" % len(self)
 
-    @classmethod
-    def from_serializable(cls, contents):
-        return cls(**contents)
+    def __len__(self):
+        return len(self.token_to_idx)
 
     def add_token(self, token):
         if token in self.token_to_idx:
@@ -42,11 +41,13 @@ class Vocabulary(object):
             raise KeyError("the index (%d) is not in the Vocabulary" % index)
         return self.idx_to_token[index]
 
-    def __str__(self):
-        return "<Vocabulary(size=%d)>" % len(self)
+    def to_serializable(self):
+        return {'token_to_idx': self.token_to_idx}
 
-    def __len__(self):
-        return len(self.token_to_idx)
+    @classmethod
+    def from_serializable(cls, contents):
+        return cls(**contents)
+
 
 class SequenceVocabulary(Vocabulary):
     def __init__(self, token_to_idx=None, unk_token="<UNK>",
@@ -69,6 +70,12 @@ class SequenceVocabulary(Vocabulary):
         self.idx_to_token = {idx: token \
                              for token, idx in self.token_to_idx.items()}
 
+    def __str__(self):
+        return "<SequenceVocabulary(size=%d)>" % len(self.token_to_idx)
+
+    def lookup_token(self, token):
+        return self.token_to_idx.get(token, self.unk_index)
+
     def to_serializable(self):
         contents = super(SequenceVocabulary, self).to_serializable()
         contents.update({'unk_token': self.unk_token,
@@ -76,10 +83,4 @@ class SequenceVocabulary(Vocabulary):
                          'begin_seq_token': self.begin_seq_token,
                          'end_seq_token': self.end_seq_token})
         return contents
-
-    def lookup_token(self, token):
-        return self.token_to_idx.get(token, self.unk_index)
-
-    def __str__(self):
-        return "<SequenceVocabulary(size=%d)>" % len(self.token_to_idx)
 

@@ -14,6 +14,7 @@ import uuid
 from config import DATA_DIR, EXPERIMENTS_DIR, TENSORBOARD_DIR
 from document_classification.preprocessor import Preprocessor
 from document_classification.dataset import Dataset
+from document_classification.models import initialize_model
 from document_classification.model import Model
 from document_classification.utils import class_weights, \
                                           collate_fn, load_json, load_yaml, wrap_text, \
@@ -33,7 +34,6 @@ args = parser.parse_args()
 # Read config
 config = load_yaml(filepath=args.model_configuration_file)
 
-
 ### REMOVE BELOW ###
 config["filepaths"] = {}
 config["filepaths"]["model_filepath"] = "exp1/model.pth"
@@ -43,23 +43,21 @@ config["filepaths"]["preprocessor_filepath"] = "exp1/preprocessor.json"
 config["filepaths"]["model_configuration_filepath"] = "exp1/model_configuration.yaml"
 ### REMOVE ABOVE ###
 
-save_yaml(json_obj=config,
+save_yaml(obj=config,
           filepath=config["filepaths"]["model_configuration_filepath"])
-
-# ╒══════════╕
-# │ Training │
-# ╘══════════╛
 
 # Load data
 df = load_data(data_csv=args.data_csv)
+column_names = {
+    config['data']['input_feature']: "X",
+    config['data']['output_feature']: "y",
+}
+df = df.rename(columns=column_names)
 
 # Preprocess data
-preprocessor = Preprocessor(input_feature=config["data"]["input_feature"],
-                            output_feature=config["data"]["output_feature"],
-                            split_level=config["preprocessing"]["split_level"],
-                            case_sensitive=config["preprocessing"]["case_sensitive"],
-                            allow_numbers=config["preprocessing"]["allow_numbers"],
-                            allow_punctuation=config["preprocessing"]["allow_punctuation"])
+preprocessor = Preprocessor(lower=config["preprocessing"]["lower"],
+                            char_level=config["preprocessing"]["char_level"],
+                            filters=config["preprocessing"]["filters"])
 df = preprocessor.clean_df(df)
 
 # Split data
@@ -77,7 +75,8 @@ vectorizer.fit(df=train_df,
 
 # Model
 tensorboard = TensorboardLogger(log_dir="tensorboard/experiment")
-model = Model(model_config=config["model"],
+model = Model(build_fn=initialize_model,
+              model_config=config["model"],
               vectorizer=vectorizer,
               model_filepath=config["filepaths"]["model_filepath"],
               tensorboard=tensorboard)
@@ -97,8 +96,8 @@ results = model.fit(train_df=train_df,
                     cuda=config["training"]["cuda"])
 
 # Save
-preprocessor.save(preprocessor_filepath=config["filepaths"]["preprocessor_filepath"])
-vectorizer.save(vectorizer_filepath=config["filepaths"]["vectorizer_filepath"])
+preprocessor.save(filepath=config["filepaths"]["preprocessor_filepath"])
+vectorizer.save(filepath=config["filepaths"]["vectorizer_filepath"])
 with open(config["filepaths"]["results_filepath"], "w") as fp:
     json.dump(model.results, fp, indent=4)
 
@@ -107,13 +106,14 @@ with open(config["filepaths"]["results_filepath"], "w") as fp:
 # ╘════════════╛
 
 # Load preprocessor
-preprocessor = Preprocessor.load(preprocessor_filepath=config["filepaths"]["preprocessor_filepath"])
+preprocessor = Preprocessor.load(filepath=config["filepaths"]["preprocessor_filepath"])
 
 # Load vectorizer
-vectorizer = Vectorizer.load(vectorizer_filepath=config["filepaths"]["vectorizer_filepath"])
+vectorizer = Vectorizer.load(filepath=config["filepaths"]["vectorizer_filepath"])
 
 # Load trained model
-model = Model(model_config=config["model"],
+model = Model(build_fn=initialize_model,
+              model_config=config["model"],
               vectorizer=vectorizer)
 model.load(config["filepaths"]["model_filepath"])
 

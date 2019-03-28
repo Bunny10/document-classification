@@ -9,9 +9,6 @@ import torch
 from document_classification.vocabulary import Vocabulary, SequenceVocabulary
 from document_classification.utils import load_json, wrap_text
 
-# Logger
-ml_logger = logging.getLogger("ml_logger")
-
 class Vectorizer(object):
     def __init__(self, X_vocab=None, y_vocab=None):
         self.X_vocab = X_vocab
@@ -28,14 +25,14 @@ class Vectorizer(object):
             self.y_vocab.add_token(y)
 
         # Get token counts
-        tokne_counts = Counter()
+        token_counts = Counter()
         for X in df.X:
-            for token in X.split(" "):
-                tokne_counts[token] += 1
+            for token in X.split(' '):
+                token_counts[token] += 1
 
-        # Create X vocab
+        # Create sequence vocab
         self.X_vocab = SequenceVocabulary()
-        for token, token_count in tokne_counts.items():
+        for token, token_count in token_counts.items():
             if token_count >= min_token_frequency:
                 self.X_vocab.add_token(token)
 
@@ -62,16 +59,16 @@ class Vectorizer(object):
         return df
 
     def to_serializable(self):
-        return {"X_vocab": self.X_vocab.to_serializable(),
-                "y_vocab": self.y_vocab.to_serializable()}
+        return {'X_vocab': self.X_vocab.to_serializable(),
+                'y_vocab': self.y_vocab.to_serializable()}
 
     @classmethod
-    def load(cls, vectorizer_filepath):
-        contents = load_json(vectorizer_filepath)
-        X_vocab = SequenceVocabulary.from_serializable(contents["X_vocab"])
-        y_vocab = Vocabulary.from_serializable(contents["y_vocab"])
+    def load(cls, filepath):
+        contents = load_json(filepath)
+        X_vocab = SequenceVocabulary.from_serializable(contents['X_vocab'])
+        y_vocab = Vocabulary.from_serializable(contents['y_vocab'])
         return cls(X_vocab=X_vocab, y_vocab=y_vocab)
 
-    def save(self, vectorizer_filepath):
-        with open(vectorizer_filepath, "w") as fp:
+    def save(self, filepath):
+        with open(filepath, 'w') as fp:
             json.dump(self.to_serializable(), fp, indent=4)

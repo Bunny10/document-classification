@@ -11,41 +11,29 @@ ml_logger = logging.getLogger("ml_logger")
 
 
 class Preprocessor(object):
-    def __init__(self, input_feature, output_feature, split_level,
-                 case_sensitive, allow_numbers, allow_punctuation):
-        # Feature names
-        self.input_feature = input_feature
-        self.output_feature = output_feature
+    def __init__(self, lower, char_level, filters):
 
         # Cleaning parameters
-        self.split_level = split_level
-        self.case_sensitive = case_sensitive
-        self.allow_numbers = allow_numbers
-        self.allow_punctuation = allow_punctuation
+        self.lower = lower
+        self.char_level = char_level
+        self.filters = filters
 
     def clean(self, text):
         """Basic text preprocessing."""
 
         # Case sensitive
-        if not self.case_sensitive:
+        if self.lower:
             text = " ".join(token.lower() for token in text.split(" "))
 
         # Split into tokens
-        if self.split_level == "word":
-            text = " ".join(token for token in text.split(" "))
-        elif self.split_level == "char":
+        if self.char_level:
             text = " ".join(token for token in text)
+        else:
+            text = " ".join(token for token in text.split(" "))
 
-        # Clean newlines
-        text = text.replace("\n", " ")
-
-        # Regex
-        regex_expression = r"[^a-zA-Z]+"
-        if self.allow_numbers:
-            regex_expression += r"[^0-9]+"
-        if self.allow_punctuation:
-            regex_expression += r"[^.,?!:;-$%&()[]#]+"
-        text = re.sub(regex_expression, r" ", text)
+        # Filter
+        for token in self.filters:
+            text = text.replace(token, " ")
 
         # Remove leading and trailing spaces
         text = text.strip()
@@ -53,24 +41,21 @@ class Preprocessor(object):
         return text
 
     def clean_df(self, df):
-        # Rename columns
-        column_names = {self.input_feature: "X", self.output_feature: "y"}
-        df = df.rename(columns=column_names)
 
         # Clean inputs
         df.X = df.X.apply(func=self.clean)
 
         wrap_text("Preprocessed data")
-        ml_logger.info(df.head(5))
+        print (df.head(5))
         return df
 
     @classmethod
-    def load(cls, preprocessor_filepath):
-        contents = load_json(preprocessor_filepath)
+    def load(cls, filepath):
+        contents = load_json(filepath)
         return cls(**contents)
 
-    def save(self, preprocessor_filepath):
-        with open(preprocessor_filepath, "w") as fp:
+    def save(self, filepath):
+        with open(filepath, "w") as fp:
             json.dump(self.__dict__, fp, indent=4)
 
 

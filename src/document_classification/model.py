@@ -18,88 +18,12 @@ from document_classification.utils import BatchLogger, compute_accuracy, \
 # Logger
 ml_logger = logging.getLogger("ml_logger")
 
-class DocumentClassificationModel(nn.Module):
-    def __init__(self, embedding_dim, num_embeddings, num_channels,
-                 filter_sizes, hidden_dim, num_classes, dropout_p,
-                 padding_idx=0, freeze_embeddings=False):
-        super(DocumentClassificationModel, self).__init__()
-
-        # Emebddings
-        self.embeddings = nn.Embedding(embedding_dim=embedding_dim,
-                                       num_embeddings=num_embeddings,
-                                       padding_idx=padding_idx)
-
-        # Conv weights
-        self.conv = nn.ModuleList([nn.Conv1d(embedding_dim, num_channels,
-                                  kernel_size=f) for f in filter_sizes])
-
-        # FC weights
-        self.dropout = nn.Dropout(dropout_p)
-        self.fc1 = nn.Linear(num_channels*3, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, num_classes)
-
-        # Freeze embeddings
-        if freeze_embeddings:
-            self.embeddings.weight.requires_grad = False
-
-    def forward(self, X, channel_first=False, apply_softmax=False):
-        """Forward pass."""
-
-        # ╒═══════╕
-        # │ Embed │
-        # ╘═══════╛
-
-        # Embed inputs
-        X = self.embeddings(X)
-
-        # ╒════════╕
-        # │ Encode │
-        # ╘════════╛
-
-        # Rearrange input so num_channels is in dim 1 (N, C, L)
-        if not channel_first:
-            X = X.transpose(1, 2)
-
-        # Conv outputs
-        z1 = self.conv[0](X)
-        z1 = F.max_pool1d(z1, z1.size(2)).squeeze(2)
-        z2 = self.conv[1](X)
-        z2 = F.max_pool1d(z2, z2.size(2)).squeeze(2)
-        z3 = self.conv[2](X)
-        z3 = F.max_pool1d(z3, z3.size(2)).squeeze(2)
-
-        # Concat conv outputs
-        z = torch.cat([z1, z2, z3], 1)
-
-        # ╒════════╕
-        # │ Decode │
-        # ╘════════╛
-
-        # FC layers
-        z = self.dropout(z)
-        z = self.fc1(z)
-        y_pred = self.fc2(z)
-
-        # Softmax
-        if apply_softmax:
-            y_pred = F.softmax(y_pred, dim=1)
-
-        return y_pred
-
 
 class Model(object):
-    def __init__(self, model_config, vectorizer, model_filepath=None, tensorboard=None):
+    def __init__(self, build_fn, model_config, vectorizer,
+                 model_filepath=None, tensorboard=None):
         """Initialize the model."""
-        self._model = DocumentClassificationModel(
-            embedding_dim=model_config["embeddings"]["embedding_dim"],
-            num_embeddings=len(vectorizer.X_vocab),
-            num_channels=model_config["cnn"]["num_filters"],
-            filter_sizes=model_config["cnn"]["filter_sizes"],
-            hidden_dim=model_config["fc"]["hidden_dim"],
-            num_classes=len(vectorizer.y_vocab),
-            dropout_p=model_config["fc"]["dropout_p"],
-            padding_idx=vectorizer.X_vocab.mask_index,
-            freeze_embeddings=model_config["embeddings"]["freeze_embeddings"])
+        self.model = build_fn(model_config, vectorizer)
         self.vectorizer = vectorizer
         self.model_filepath = model_filepath
         self.tensorboard = tensorboard
@@ -113,11 +37,11 @@ class Model(object):
                                           device=torch.device("cpu"))
         for batch_dict in loader:
             inputs = batch_dict["X"]
-            model_summary(self._model, inputs)
+            model_summary(self.model, inputs)
 
     def compile(self, train_df, learning_rate, early_stopping_criteria):
         self.learning_rate = learning_rate
-        self.optimizer = optim.Adam(self._model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode="min", factor=0.5, patience=1)
         self.loss_func = nn.CrossEntropyLoss(class_weights(train_df, self.vectorizer))
         self.early_stopping_criteria = early_stopping_criteria
@@ -127,7 +51,7 @@ class Model(object):
         """Process a batch."""
 
         # Forward pass
-        predictions = self._model(batch_dict["X"])
+        predictions = self.model(batch_dict["X"])
         batch_loss = self.loss_func(predictions, batch_dict["y"])
         batch_accuracy = compute_accuracy(predictions, batch_dict["y"])
 
@@ -149,8 +73,8 @@ class Model(object):
         start = time.time()
         epoch_loss = 0.0
         epoch_accuracy = 0.0
-        if mode == "train": self._model.train()
-        else: self._model.eval()
+        if mode == "train": self.model.train()
+        else: self.model.eval()
 
         # Process batches
         y_true = []
@@ -187,7 +111,7 @@ class Model(object):
 
         # Set device
         self.device = torch.device("cuda" if cuda else "cpu")
-        self._model.to(self.device)
+        self.model.to(self.device)
 
         # Datasets
         train_dataset = Dataset(df=train_df, vectorizer=self.vectorizer)
@@ -241,7 +165,7 @@ class Model(object):
 
             # Log to tensorboard
             if self.tensorboard:
-                self.tensorboard.log(model=self._model,
+                self.tensorboard.log(model=self.model,
                                      results=self.results,
                                      learning_rate=self.optimizer.param_groups[0]["lr"],
                                      step=epoch_index)
@@ -266,9 +190,9 @@ class Model(object):
         classes = list(self.vectorizer.y_vocab.token_to_idx.keys())
         for i in range(len(classes)):
             self.results["test_performance"]["class_performance"][classes[i]] = {
-                "precision": metrics[0][i]*100.0,
-                "recall": metrics[1][i]*100.0,
-                "f1": metrics[2][i]*100.0,
+                "precision": metrics[0][i],
+                "recall": metrics[1][i],
+                "f1": metrics[2][i],
                 "num_samples": np.float64(metrics[3][i])
             }
         ml_logger.info("\n")
@@ -292,12 +216,12 @@ class Model(object):
             return False
 
     def predict(self, X):
-        self._model.eval()
-        self._model = self._model.to("cpu")
+        self.model.eval()
+        self.model = self.model.to("cpu")
 
         # Forward pass
         X = torch.LongTensor(X).unsqueeze(0)
-        y_pred = self._model(X, apply_softmax=True)
+        y_pred = self.model(X, apply_softmax=True)
         classes = self.vectorizer.y_vocab
 
         # Top k nationalities
@@ -313,10 +237,10 @@ class Model(object):
         return prediction
 
     def save(self, model_filepath):
-        torch.save(self._model.state_dict(), model_filepath)
+        torch.save(self.model.state_dict(), model_filepath)
 
     def load(self, model_filepath):
-        self._model.load_state_dict(torch.load(model_filepath), strict=False)
+        self.model.load_state_dict(torch.load(model_filepath), strict=False)
 
 
 
